@@ -23,6 +23,11 @@ source-repository head
   type: git
   location: https://github.com/dpwiz/dear-bindings-aeson
 
+flag executables
+  description: Build the CLI executables (pulls in pandoc; off by default).
+  manual: True
+  default: False
+
 library
   exposed-modules:
       DearBindings.JSON
@@ -52,9 +57,16 @@ library
     , text
   default-language: Haskell2010
 
-executable dear-bindings-aeson-exe
+executable dear-bindings-doc
   main-is: Main.hs
   other-modules:
+      Catalog
+      Cli
+      Generate
+      Query
+      Render
+      Render.Common
+      Writer
       Paths_dear_bindings_aeson
   autogen-modules:
       Paths_dear_bindings_aeson
@@ -65,9 +77,17 @@ executable dear-bindings-aeson-exe
       aeson >=2.2
     , base >=4.7 && <5
     , bytestring
+    , containers
     , dear-bindings-aeson
+    , directory
+    , filepath
+    , optparse-applicative
+    , pandoc
+    , pandoc-types
     , text
   default-language: Haskell2010
+  if !flag(executables)
+    buildable: False
 
 test-suite dear-bindings-aeson-test
   type: exitcode-stdio-1.0

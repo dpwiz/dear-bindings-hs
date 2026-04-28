@@ -31,6 +31,10 @@ snapshot:
 #   - wai
 packages:
 - .
+
+flags:
+  dear-bindings-aeson:
+    executables: true
 # Dependency packages to be pulled from upstream that are not in the snapshot.
 # These entries can reference officially published versions as well as
 # forks / in-progress versions pinned to a git hash. For example:
