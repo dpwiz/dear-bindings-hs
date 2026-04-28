@@ -130,7 +130,7 @@ cat > "$OUTPUT_DIR/index.html" <<EOF
 <meta charset="utf-8">
 <title>dear-imgui API browser</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 32em; margin: 4em auto; padding: 0 1em; }
+  body { font-family: system-ui, sans-serif; max-width: 120ex; margin: 4em auto; padding: 0 1em; }
   a { color: #0366d6; }
 </style>
 <h1>dear-imgui API browser</h1>
