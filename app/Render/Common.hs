@@ -47,10 +47,11 @@ module Render.Common
   , sourceFooter
   , anchor
   , attr
+  , breadcrumbs
   ) where
 
 import Data.Char (isAlpha, isAlphaNum)
-import Data.List (sortOn)
+import Data.List (intersperse, sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes)
@@ -288,3 +289,17 @@ anchor cat name =
 -- | Synonym for an empty 'Attr' (no id, no class, no key/value pairs).
 attr :: Attr
 attr = ("", [], [])
+
+{- | Render a breadcrumb trail as a single paragraph. Each entry is a
+label and an optional URL; entries with @Just@ become hyperlinks,
+@Nothing@ stays as plain inlines (use this for the current page).
+Entries are joined by @›@. An empty list produces no output.
+-}
+breadcrumbs :: [(Inlines, Maybe Text)] -> Blocks
+breadcrumbs [] = mempty
+breadcrumbs items =
+  B.para . mconcat . intersperse (B.text " › ") $ map render items
+  where
+    render :: (Inlines, Maybe Text) -> Inlines
+    render (label, Nothing) = label
+    render (label, Just url) = B.link url "" label

@@ -31,10 +31,11 @@ import Text.Pandoc.Builder (Blocks)
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Walk qualified as Walk
 
-renderSlice :: LinkContext -> Slice -> Pandoc.Pandoc
-renderSlice ctx s =
-  B.setMeta "pagetitle" (B.text s.qualifier) $
-    B.doc body
+renderSlice :: LinkContext -> Blocks -> Slice -> Pandoc.Pandoc
+renderSlice ctx crumbs s =
+  B.setMeta "include-before" crumbs $
+    B.setMeta "pagetitle" (B.text s.qualifier) $
+      B.doc body
   where
     body =
       B.header 1 (B.code s.qualifier)

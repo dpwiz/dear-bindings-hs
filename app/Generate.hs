@@ -24,11 +24,13 @@ import Render.Common
   ( Category (..)
   , LinkBase (..)
   , LinkContext (..)
+  , breadcrumbs
   , categoryDir
   , categoryHref
   , categoryLabel
   , entityHref
   , groupByQualifier
+  , rootHref
   , sliceHref
   , slicesDir
   , slicesIndexHref
@@ -136,7 +138,15 @@ emitCategory base outdir format opts cat entries = do
   -- One file per entity
   forM_ entries $ \(name, blocks) -> do
     let
-      doc = B.setMeta "pagetitle" (B.text name) (B.doc blocks)
+      crumbs =
+        breadcrumbs
+          [ (B.text "dear-imgui API", Just (rootHref base 1))
+          , (B.text (categoryLabel cat), Just (categoryHref base 1 cat))
+          , (B.code name, Nothing)
+          ]
+      doc =
+        B.setMeta "include-before" crumbs $
+          B.setMeta "pagetitle" (B.text name) (B.doc blocks)
       path = catDir </> Text.unpack (name <> "." <> base.extension)
     text <- format.write opts doc
     liftIO $ Text.writeFile path text
@@ -167,15 +177,29 @@ emitSlices ctx base outdir format plainOpts tocOpts ss = do
   -- One file per slice, with ToC enabled for navigation.
   forM_ ss $ \s -> do
     let
-      doc = Render.Slice.renderSlice ctx s
+      crumbs =
+        breadcrumbs
+          [ (B.text "dear-imgui API", Just (rootHref base 1))
+          , (B.text "Slices", Just (slicesIndexHref base 1))
+          , (B.code s.qualifier, Nothing)
+          ]
+      doc = Render.Slice.renderSlice ctx crumbs s
       path = dir </> Text.unpack (s.qualifier <> "." <> base.extension)
     text <- format.write tocOpts doc
     liftIO $ Text.writeFile path text
 
 slicesIndexDoc :: LinkBase -> [Slice] -> Pandoc.Pandoc
 slicesIndexDoc base ss =
-  B.setMeta "pagetitle" (B.text "Slices") $
-    B.doc $
+  B.setMeta "include-before" crumbs $
+    B.setMeta "pagetitle" (B.text "Slices") $
+      B.doc body
+  where
+    crumbs =
+      breadcrumbs
+        [ (B.text "dear-imgui API", Just (rootHref base 1))
+        , (B.text "Slices", Nothing)
+        ]
+    body =
       B.header 1 (B.text "Slices")
         <> case ss of
           [] -> B.para (B.emph (B.text "(none)"))
@@ -185,7 +209,7 @@ slicesIndexDoc base ss =
               grouped = groupByQualifier [s.qualifier | s <- ss]
             in
               mconcat (map (renderGroup byName) grouped)
-  where
+
     renderGroup :: Map.Map Text Slice -> (Maybe Text, [(Text, Text)]) -> Blocks
     renderGroup byName (qual, entries) =
       let listing = B.bulletList (map (item byName) entries)
@@ -240,13 +264,20 @@ rootDoc base catalog ss =
 
 categoryDoc :: LinkBase -> Category -> [Text] -> Pandoc.Pandoc
 categoryDoc base cat names =
-  B.setMeta "pagetitle" (B.text (categoryLabel cat)) $
-    B.doc $
+  B.setMeta "include-before" crumbs $
+    B.setMeta "pagetitle" (B.text (categoryLabel cat)) $
+      B.doc body
+  where
+    crumbs =
+      breadcrumbs
+        [ (B.text "dear-imgui API", Just (rootHref base 1))
+        , (B.text (categoryLabel cat), Nothing)
+        ]
+    body =
       B.header 1 (B.text (categoryLabel cat))
         <> case names of
           [] -> B.para (B.emph (B.text "(none)"))
           _ -> mconcat (map renderGroup (groupByQualifier names))
-  where
     renderGroup :: (Maybe Text, [(Text, Text)]) -> Blocks
     renderGroup (qual, entries) =
       let listing = B.bulletList (map item entries)
