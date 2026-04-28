@@ -1,6 +1,6 @@
-name:                hsimgui
+name:                dear-bindings-aeson
 version:             0.1.0.0
-github:              "dpwiz/hsimgui"
+github:              "dpwiz/dear-bindings-aeson"
 license:             BSD-3-Clause
 author:              "IC Rainbow"
 maintainer:          "aenor.realm@gmail.com"
@@ -17,10 +17,13 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/dpwiz/hsimgui#readme>
+description:         Please see the README on GitHub at <https://github.com/dpwiz/dear-bindings-aeson#readme>
 
 dependencies:
 - base >= 4.7 && < 5
+- aeson >= 2.2
+- bytestring
+- text
 
 ghc-options:
 - -Wall
@@ -37,7 +40,7 @@ library:
   source-dirs: src
 
 executables:
-  hsimgui-exe:
+  dear-bindings-aeson-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -45,10 +48,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - hsimgui
+    - dear-bindings-aeson
 
 tests:
-  hsimgui-test:
+  dear-bindings-aeson-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -56,4 +59,10 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - hsimgui
+    - dear-bindings-aeson
+    - aeson
+    - bytestring
+    - directory
+    - filepath
+    - tasty
+    - tasty-hunit

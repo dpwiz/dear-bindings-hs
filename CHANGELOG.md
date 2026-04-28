@@ -1,4 +1,4 @@
-# Changelog for `hsimgui`
+# Changelog for `dear-bindings-aeson`
 
 All notable changes to this project will be documented in this file.
 
