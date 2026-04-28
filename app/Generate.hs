@@ -175,6 +175,11 @@ emitSlices ctx base outdir format plainOpts tocOpts ss = do
       idxText
 
   -- One file per slice, with ToC enabled for navigation.
+  --
+  -- The sidebar style is HTML-only — pandoc's gfm/commonmark writer
+  -- preserves raw <style> blocks verbatim, so emitting the same meta
+  -- for every format would leak CSS as visible text in the markdown
+  -- output. Gate by format name.
   forM_ ss $ \s -> do
     let
       crumbs =
@@ -183,10 +188,43 @@ emitSlices ctx base outdir format plainOpts tocOpts ss = do
           , (B.text "Slices", Just (slicesIndexHref base 1))
           , (B.code s.qualifier, Nothing)
           ]
-      doc = Render.Slice.renderSlice ctx crumbs s
+      withStyle
+        | format.name `elem` ["html5", "html"] =
+            B.setMeta "header-includes" sliceSidebarStyle
+        | otherwise = id
+      doc = withStyle (Render.Slice.renderSlice ctx crumbs s)
       path = dir </> Text.unpack (s.qualifier <> "." <> base.extension)
     text <- format.write tocOpts doc
     liftIO $ Text.writeFile path text
+
+{- | Inline @\<style\>@ block injected into slice pages. Floats the
+auto-generated ToC (@nav#TOC@) into a sticky right-hand sidebar on
+viewports wide enough to fit it; on narrow screens the rules don't
+apply, so the ToC reverts to its default block layout above the
+content. HTML5-only; other writers see a no-op raw block.
+-}
+sliceSidebarStyle :: Blocks
+sliceSidebarStyle =
+  B.rawBlock "html" $
+    Text.unlines
+      [ "<style>"
+      , "@media (min-width: 900px) {"
+      , "  body { max-width: 64em; }"
+      , "  nav#TOC {"
+      , "    float: right;"
+      , "    position: sticky;"
+      , "    top: 1em;"
+      , "    width: 16em;"
+      , "    max-height: calc(100vh - 2em);"
+      , "    overflow-y: auto;"
+      , "    margin: 0 0 1em 1.5em;"
+      , "    padding-left: 1em;"
+      , "    border-left: 2px solid #e6e6e6;"
+      , "    font-size: 0.9em;"
+      , "  }"
+      , "}"
+      , "</style>"
+      ]
 
 slicesIndexDoc :: LinkBase -> [Slice] -> Pandoc.Pandoc
 slicesIndexDoc base ss =
