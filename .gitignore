@@ -1,5 +1,6 @@
-dear_bindings
-output
+dear_bindings/
+output/
+dist/
 
 dist-newstyle/
 .stack-work/

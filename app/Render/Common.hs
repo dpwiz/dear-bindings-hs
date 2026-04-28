@@ -24,6 +24,13 @@ module Render.Common
   , entityHref
   , categoryHref
   , rootHref
+  , slicesDir
+  , sliceHref
+  , slicesIndexHref
+
+    -- * Names / qualifiers
+  , splitQualifier
+  , groupByQualifier
 
     -- * Body helpers
   , commentBlocks
@@ -32,6 +39,8 @@ module Render.Common
   , attr
   ) where
 
+import Data.List (sortOn)
+import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -113,6 +122,44 @@ categoryHref base depth cat =
 -- | URL of the top-level @index@ page, relative to a page at @depth@.
 rootHref :: LinkBase -> Int -> Text
 rootHref base depth = href base depth ("index." <> base.extension)
+
+-- | Subdirectory holding the qualifier-slice pages.
+slicesDir :: Text
+slicesDir = "slices"
+
+-- | URL of a single slice page, relative to a page at @depth@.
+sliceHref :: LinkBase -> Int -> Text -> Text
+sliceHref base depth qualifier =
+  href base depth (slicesDir <> "/" <> qualifier <> "." <> base.extension)
+
+-- | URL of the slices @index@ page, relative to a page at @depth@.
+slicesIndexHref :: LinkBase -> Int -> Text
+slicesIndexHref base depth =
+  href base depth (slicesDir <> "/index." <> base.extension)
+
+{- | Split a qualified C name like @ImDrawList_AddCircle@ on the LAST
+underscore: @(Just "ImDrawList", "AddCircle")@. Names with no
+underscore (@ImVec2@) or a trailing underscore (@ImGuiWindowFlags_@,
+the dear-bindings convention for flag-enum tags) are treated as
+unqualified — they show up under no header on the index page.
+-}
+splitQualifier :: Text -> (Maybe Text, Text)
+splitQualifier name = case Text.breakOnEnd "_" name of
+  ("", _) -> (Nothing, name)
+  (_, "") -> (Nothing, name)
+  (qual, n) -> (Just (Text.dropEnd 1 qual), n)
+
+{- | Group a list of names by their qualifier. The 'Nothing' bucket
+(unqualified names) sorts first; remaining buckets are alphabetical.
+Each value list is @(full_name, short_name)@ sorted by short name.
+-}
+groupByQualifier :: [Text] -> [(Maybe Text, [(Text, Text)])]
+groupByQualifier names =
+  let
+    pairs = [(q, (full, short)) | full <- names, let (q, short) = splitQualifier full]
+    grouped = Map.fromListWith (++) [(q, [v]) | (q, v) <- pairs]
+  in
+    [(q, sortOn snd entries) | (q, entries) <- Map.toAscList grouped]
 
 {- | Render the @comments@ field. Preceding lines become a code block
 that preserves them verbatim (the source is already prefixed with

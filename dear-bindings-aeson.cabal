@@ -66,6 +66,8 @@ executable dear-bindings-doc
       Query
       Render
       Render.Common
+      Render.Slice
+      Slice
       Writer
       Paths_dear_bindings_aeson
   autogen-modules:

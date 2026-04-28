@@ -49,9 +49,12 @@ fi
 echo "==> Building dear-bindings-doc"
 stack build dear-bindings-aeson:exe:dear-bindings-doc
 
-# Path to the freshly built binary — used both to invoke it and as a
-# cache-busting input for the fingerprint check.
+# Path to the freshly built binary, plus a content hash. We use the
+# hash (not mtime) in the fingerprint because `stack build` re-touches
+# the installed binary on every run, which would otherwise bust the
+# cache after a no-op rebuild.
 exe_path="$(stack path --local-install-root)/bin/dear-bindings-doc"
+exe_hash="$(sha256sum "$exe_path" | cut -d' ' -f1)"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -93,20 +96,23 @@ for variant in vanilla docking; do
     args+=(--base-path "$prefix/$variant/")
   fi
 
-  # Cache key: anything that materially changes the output. Inputs are
-  # sorted so reorderings of the file glob don't bust the cache.
+  # Cache key: anything that materially changes the output. The binary
+  # is identified by content hash (not mtime) because `stack build`
+  # re-touches its installed copy on every run. Inputs are sorted so
+  # reorderings of the file glob don't bust the cache.
   sentinel="$dst_dir/.fingerprint"
   fingerprint=$(printf '%s\n' \
     "format=$FORMAT" \
     "base=$BASE_PATH" \
     "helpers=$WITH_DEFAULT_HELPERS" \
+    "exe=$exe_hash" \
     "inputs=$(printf '%s\n' "${inputs[@]}" | sort)")
 
   if [ "$FORCE" != "1" ] \
      && [ -d "$dst_dir" ] \
      && [ -f "$sentinel" ] \
      && [ "$(cat "$sentinel")" = "$fingerprint" ] \
-     && [ -z "$(find "${inputs[@]}" "$exe_path" -newer "$sentinel" 2>/dev/null)" ]; then
+     && [ -z "$(find "${inputs[@]}" -newer "$sentinel" 2>/dev/null)" ]; then
     echo "==> $variant up to date, skipping (use FORCE=1 to override)"
     continue
   fi

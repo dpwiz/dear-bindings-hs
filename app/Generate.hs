@@ -14,8 +14,8 @@ module Generate
 import Catalog (Catalog (..))
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
-import Data.List (sortOn)
 import Data.Map.Strict qualified as Map
+import Data.Maybe (maybeToList)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
@@ -27,7 +27,14 @@ import Render.Common
   , categoryHref
   , categoryLabel
   , entityHref
+  , groupByQualifier
+  , sliceHref
+  , slicesDir
+  , slicesIndexHref
   )
+import Render.Slice qualified
+import Slice (Slice (..))
+import Slice qualified
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import Text.Pandoc qualified as Pandoc
@@ -42,50 +49,59 @@ directories are created.
 -}
 run :: Catalog -> LinkBase -> Format -> FilePath -> IO ()
 run catalog base format outdir = Pandoc.runIOorExplode $ do
-  -- Every page in the tree has exactly one top-level heading, so a
-  -- table of contents would be a single-item list — we always omit it.
-  opts <- Writer.formatOptions format False True
+  -- Plain options: per-entity and category-index pages have a single
+  -- top-level heading, so a ToC would be a one-item list.
+  --
+  -- Toc options: slice pages collect many entities under one document
+  -- and benefit from the auto-generated ToC pandoc places at the top.
+  plainOpts <- Writer.formatOptions format False True
+  tocOpts <- Writer.formatOptions format True True
+
   liftIO $ createDirectoryIfMissing True outdir
 
+  let allSlices = Slice.slices catalog
+
   -- Top-level index
-  topText <- format.write opts (rootDoc base catalog)
+  topText <- format.write plainOpts (rootDoc base catalog allSlices)
   liftIO $ Text.writeFile (outdir </> Text.unpack ("index." <> base.extension)) topText
 
   emitCategory
     base
     outdir
     format
-    opts
+    plainOpts
     Defines
     [(n, Render.renderDefine x) | (n, x) <- Map.toAscList catalog.defines]
   emitCategory
     base
     outdir
     format
-    opts
+    plainOpts
     Enums
     [(n, Render.renderEnum x) | (n, x) <- Map.toAscList catalog.enums]
   emitCategory
     base
     outdir
     format
-    opts
+    plainOpts
     Typedefs
     [(n, Render.renderTypedef x) | (n, x) <- Map.toAscList catalog.typedefs]
   emitCategory
     base
     outdir
     format
-    opts
+    plainOpts
     Structs
     [(n, Render.renderStruct x) | (n, x) <- Map.toAscList catalog.structs]
   emitCategory
     base
     outdir
     format
-    opts
+    plainOpts
     Functions
     [(n, Render.renderFunction x) | (n, x) <- Map.toAscList catalog.functions]
+
+  emitSlices base outdir format plainOpts tocOpts allSlices
 
 emitCategory
   :: LinkBase
@@ -115,21 +131,100 @@ emitCategory base outdir format opts cat entries = do
     liftIO $ Text.writeFile path text
 
 -- ---------------------------------------------------------------------------
+-- Slices
+
+emitSlices
+  :: LinkBase
+  -> FilePath
+  -> Format
+  -> Pandoc.WriterOptions
+  -> Pandoc.WriterOptions
+  -> [Slice]
+  -> Pandoc.PandocIO ()
+emitSlices base outdir format plainOpts tocOpts ss = do
+  let dir = outdir </> Text.unpack slicesDir
+  liftIO $ createDirectoryIfMissing True dir
+
+  -- Slices index page
+  idxText <- format.write plainOpts (slicesIndexDoc base ss)
+  liftIO $
+    Text.writeFile
+      (dir </> Text.unpack ("index." <> base.extension))
+      idxText
+
+  -- One file per slice, with ToC enabled for navigation.
+  forM_ ss $ \s -> do
+    let
+      doc = Render.Slice.renderSlice s
+      path = dir </> Text.unpack (s.qualifier <> "." <> base.extension)
+    text <- format.write tocOpts doc
+    liftIO $ Text.writeFile path text
+
+slicesIndexDoc :: LinkBase -> [Slice] -> Pandoc.Pandoc
+slicesIndexDoc base ss =
+  B.setMeta "pagetitle" (B.text "Slices") $
+    B.doc $
+      B.header 1 (B.text "Slices")
+        <> case ss of
+          [] -> B.para (B.emph (B.text "(none)"))
+          _ ->
+            let
+              byName = Map.fromList [(s.qualifier, s) | s <- ss]
+              grouped = groupByQualifier [s.qualifier | s <- ss]
+            in
+              mconcat (map (renderGroup byName) grouped)
+  where
+    renderGroup :: Map.Map Text Slice -> (Maybe Text, [(Text, Text)]) -> Blocks
+    renderGroup byName (qual, entries) =
+      let listing = B.bulletList (map (item byName) entries)
+      in case qual of
+           Nothing -> listing
+           Just q -> B.header 2 (B.code q) <> listing
+
+    item :: Map.Map Text Slice -> (Text, Text) -> Blocks
+    item byName (full, short) =
+      let countLabel = maybe "" sliceCountLabel (Map.lookup full byName)
+      in B.plain $
+           B.link (sliceHref base 1 full) "" (B.code short)
+             <> B.space
+             <> B.text countLabel
+
+sliceCountLabel :: Slice -> Text
+sliceCountLabel s =
+  let parts =
+        [ countOf "struct" (length (maybeToList s.struct))
+        , countOf "enum" (length s.enums)
+        , countOf "function" (length s.functions)
+        , countOf "define" (length s.defines)
+        , countOf "typedef" (length s.typedefs)
+        ]
+  in "(" <> Text.intercalate ", " (filter (not . Text.null) parts) <> ")"
+  where
+    countOf :: Text -> Int -> Text
+    countOf _ 0 = ""
+    countOf word 1 = "1 " <> word
+    countOf word n = Text.pack (show n) <> " " <> word <> "s"
+
+-- ---------------------------------------------------------------------------
 -- Index documents
 
-rootDoc :: LinkBase -> Catalog -> Pandoc.Pandoc
-rootDoc base catalog =
+rootDoc :: LinkBase -> Catalog -> [Slice] -> Pandoc.Pandoc
+rootDoc base catalog ss =
   B.setMeta "pagetitle" (B.text "dear-imgui API") $
     B.doc $
       B.header 1 (B.text "dear-imgui API")
-        <> B.bulletList (map link allCategories)
+        <> B.bulletList (map categoryEntry allCategories ++ [sliceEntry])
   where
-    link cat =
+    categoryEntry cat =
       B.plain $
         B.link (categoryHref base 0 cat) "" (B.text (categoryLabel cat))
           <> B.space
-          <> B.text (countLabel cat)
-    countLabel cat = "(" <> Text.pack (show (catalogCount cat catalog)) <> ")"
+          <> B.text ("(" <> Text.pack (show (catalogCount cat catalog)) <> ")")
+    sliceEntry =
+      B.plain $
+        B.link (slicesIndexHref base 0) "" (B.text "Slices")
+          <> B.space
+          <> B.text ("(" <> Text.pack (show (length ss)) <> ")")
 
 categoryDoc :: LinkBase -> Category -> [Text] -> Pandoc.Pandoc
 categoryDoc base cat names =
@@ -151,30 +246,6 @@ categoryDoc base cat names =
     item :: (Text, Text) -> Blocks
     item (full, short) =
       B.plain $ B.link (entityHref base 1 cat full) "" (B.code short)
-
-{- | Split a qualified C name like @ImDrawList_AddCircle@ on the LAST
-underscore: @(Just "ImDrawList", "AddCircle")@. Names with no
-underscore (@ImVec2@) or a trailing underscore (@ImGuiWindowFlags_@,
-the dear-bindings convention for flag-enum tags) are treated as
-unqualified — they show up under no header on the index page.
--}
-splitQualifier :: Text -> (Maybe Text, Text)
-splitQualifier name = case Text.breakOnEnd "_" name of
-  ("", _) -> (Nothing, name)
-  (_, "") -> (Nothing, name)
-  (qual, n) -> (Just (Text.dropEnd 1 qual), n)
-
-{- | Group a category's names by their qualifier. The 'Nothing' bucket
-(unqualified names) sorts first; remaining buckets are alphabetical.
-Each value list is @(full_name, short_name)@ sorted by short name.
--}
-groupByQualifier :: [Text] -> [(Maybe Text, [(Text, Text)])]
-groupByQualifier names =
-  let
-    pairs = [(qual, (full, short)) | full <- names, let (qual, short) = splitQualifier full]
-    grouped = Map.fromListWith (++) [(q, [v]) | (q, v) <- pairs]
-  in
-    [(q, sortOn snd entries) | (q, entries) <- Map.toAscList grouped]
 
 -- ---------------------------------------------------------------------------
 -- Helpers
