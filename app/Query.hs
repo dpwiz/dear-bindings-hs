@@ -16,6 +16,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Map.Strict qualified as Map
 import Data.Text.IO qualified as Text
 import Render qualified
+import Render.Common (emptyContext)
 import Text.Pandoc qualified as Pandoc
 import Text.Pandoc.Builder (Blocks)
 import Text.Pandoc.Builder qualified as B
@@ -35,9 +36,9 @@ functions, matching the output directory.
 allBlocks :: Catalog -> Blocks
 allBlocks c =
   mconcat
-    [ mconcat [Render.renderDefine x | (_, x) <- Map.toAscList c.defines]
-    , mconcat [Render.renderEnum x | (_, x) <- Map.toAscList c.enums]
-    , mconcat [Render.renderTypedef x | (_, x) <- Map.toAscList c.typedefs]
-    , mconcat [Render.renderStruct x | (_, x) <- Map.toAscList c.structs]
-    , mconcat [Render.renderFunction x | (_, x) <- Map.toAscList c.functions]
+    [ mconcat [Render.renderDefine emptyContext x | (_, x) <- Map.toAscList c.defines]
+    , mconcat [Render.renderEnum emptyContext x | (_, x) <- Map.toAscList c.enums]
+    , mconcat [Render.renderTypedef emptyContext x | (_, x) <- Map.toAscList c.typedefs]
+    , mconcat [Render.renderStruct emptyContext x | (_, x) <- Map.toAscList c.structs]
+    , mconcat [Render.renderFunction emptyContext x | (_, x) <- Map.toAscList c.functions]
     ]

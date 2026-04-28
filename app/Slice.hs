@@ -14,12 +14,15 @@ module Slice
   ( Slice (..)
   , slices
   , sliceSize
+  , buildSymbolTable
   ) where
 
 import Catalog (Catalog (..))
+import Data.List (maximumBy)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, mapMaybe)
+import Data.Ord (comparing)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -30,7 +33,7 @@ import DearBindings.JSON
   , Struct (..)
   , Typedef (..)
   )
-import Render.Common (splitQualifier)
+import Render.Common (Category (..), SymbolTable, splitQualifier)
 
 data Slice = Slice
   { qualifier :: Text
@@ -40,6 +43,34 @@ data Slice = Slice
   , defines :: [Define]
   , typedefs :: [Typedef]
   }
+
+-- ---------------------------------------------------------------------------
+-- Membership predicates: do entities of a given category, named @n@,
+-- belong to the slice for qualifier @q@? Single-sourced here so that
+-- 'buildSlice' (page contents) and 'buildSymbolTable' (link targets)
+-- agree on the rule.
+
+structInSlice :: Text -> Text -> Bool
+structInSlice q n = q == n
+
+functionInSlice :: Text -> Text -> Bool
+functionInSlice q n = fst (splitQualifier n) == Just q
+
+enumInSlice :: Text -> Text -> Bool
+enumInSlice q n = q `Text.isPrefixOf` n
+
+typedefInSlice :: Text -> Text -> Bool
+typedefInSlice q n = q `Text.isPrefixOf` n
+
+{- | Defines need a tweak: their names are usually @ALL_CAPS@, while
+qualifiers are @MixedCase@. Match by either the qualifier or its
+upper-cased form, both followed by an underscore. So the @ImGui@
+slice picks up @IMGUI_VERSION@, @IMGUI_HAS_TABLE@, and friends.
+-}
+defineInSlice :: Text -> Text -> Bool
+defineInSlice q n =
+  (q <> "_") `Text.isPrefixOf` n
+    || (Text.toUpper q <> "_") `Text.isPrefixOf` n
 
 {- | Compute every qualifier slice from a 'Catalog', sorted alphabetically.
 Slices that contain only a single entity are dropped — they'd just
@@ -82,36 +113,39 @@ buildSlice c q =
   Slice
     { qualifier = q
     , struct = Map.lookup q c.structs
-    , enums = filterByPrefix q c.enums
-    , functions =
-        [ f
-        | (n, f) <- Map.toAscList c.functions
-        , fst (splitQualifier n) == Just q
-        ]
-    , defines = filterDefines q c.defines
-    , typedefs = filterByPrefix q c.typedefs
+    , enums = filterMap (enumInSlice q) c.enums
+    , functions = filterMap (functionInSlice q) c.functions
+    , defines = filterMap (defineInSlice q) c.defines
+    , typedefs = filterMap (typedefInSlice q) c.typedefs
     }
 
-{- | Keep entries whose name starts with the qualifier (covers
-@ImDrawListFlags_@ for @ImDrawList@, @ImGuiCol_@ / @ImGuiCond_@ for
-@ImGui@, etc.).
--}
-filterByPrefix :: Text -> Map Text a -> [a]
-filterByPrefix q m =
-  [v | (n, v) <- Map.toAscList m, q `Text.isPrefixOf` n]
+filterMap :: (Text -> Bool) -> Map Text a -> [a]
+filterMap p m = [v | (n, v) <- Map.toAscList m, p n]
 
-{- | Defines need a tweak: their names are usually @ALL_CAPS@, while
-qualifiers are @MixedCase@. Match by either the qualifier or its
-upper-cased form, both followed by an underscore. So the @ImGui@
-slice picks up @IMGUI_VERSION@, @IMGUI_HAS_TABLE@, and friends.
+{- | Map every catalog name to its category and the qualifier of the
+most-specific kept slice that contains it (if any). Used by the
+renderers to turn type names in signatures into hyperlinks: a hit
+with a 'Just' qualifier points at the slice anchor, a hit with
+'Nothing' points at the entity's dedicated category page.
+
+"Most specific" = the longest qualifier whose membership predicate
+matches. So @ImGuiViewportFlags_@ resolves to the @ImGuiViewport@
+slice rather than the @ImGui@ slice (both are prefix matches).
 -}
-filterDefines :: Text -> Map Text Define -> [Define]
-filterDefines q m =
-  let
-    mixed = q <> "_"
-    upper = Text.toUpper q <> "_"
-  in
-    [ d
-    | (n, d) <- Map.toAscList m
-    , mixed `Text.isPrefixOf` n || upper `Text.isPrefixOf` n
-    ]
+buildSymbolTable :: Catalog -> [Slice] -> SymbolTable
+buildSymbolTable c kept =
+  Map.fromList $
+    concat
+      [ [(n, (Defines, best defineInSlice n)) | n <- Map.keys c.defines]
+      , [(n, (Enums, best enumInSlice n)) | n <- Map.keys c.enums]
+      , [(n, (Typedefs, best typedefInSlice n)) | n <- Map.keys c.typedefs]
+      , [(n, (Structs, best structInSlice n)) | n <- Map.keys c.structs]
+      , [(n, (Functions, best functionInSlice n)) | n <- Map.keys c.functions]
+      ]
+  where
+    keptQuals = [s.qualifier | s <- kept]
+    best :: (Text -> Text -> Bool) -> Text -> Maybe Text
+    best p n =
+      case filter (\q -> p q n) keptQuals of
+        [] -> Nothing
+        qs -> Just (maximumBy (comparing Text.length) qs)

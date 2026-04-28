@@ -2,14 +2,17 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoFieldSelectors #-}
 
 {-| Shared rendering helpers used by every per-record renderer in
 "Render". Two flavours of helper:
 
-  * Display: 'commentBlocks', 'sourceFooter', 'anchor', 'attr'.
+  * Display: 'commentBlocks', 'sourceFooter', 'anchor', 'attr',
+    'linkifyDecl'.
   * Linking: 'LinkBase', 'href', 'entityHref', 'categoryHref',
-    'rootHref' — used by index-file builders in "Generate", and ready
-    for cross-link substitution in renderers when that work lands.
+    'rootHref', 'sliceHref', 'symbolHref' — used both by index-file
+    builders in "Generate" and by the renderers themselves to turn
+    type names in signatures into clickable links.
 -}
 module Render.Common
   ( -- * Categories
@@ -28,6 +31,13 @@ module Render.Common
   , sliceHref
   , slicesIndexHref
 
+    -- * Symbol table / link context
+  , SymbolTable
+  , LinkContext (..)
+  , emptyContext
+  , symbolHref
+  , linkifyDecl
+
     -- * Names / qualifiers
   , splitQualifier
   , groupByQualifier
@@ -39,13 +49,15 @@ module Render.Common
   , attr
   ) where
 
+import Data.Char (isAlpha, isAlphaNum)
 import Data.List (sortOn)
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import DearBindings.JSON (Comments (..), SourceLocation (..))
-import Text.Pandoc.Builder (Blocks)
+import Text.Pandoc.Builder (Blocks, Inlines)
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Definition (Attr)
 
@@ -136,6 +148,89 @@ sliceHref base depth qualifier =
 slicesIndexHref :: LinkBase -> Int -> Text
 slicesIndexHref base depth =
   href base depth (slicesDir <> "/index." <> base.extension)
+
+{- | Catalog name → its category and the qualifier of the most-specific
+kept slice that contains it (if any). Built once per generate run;
+consulted by every renderer that wants to turn an identifier into a
+link. 'Nothing' for the slice means "this entity has no kept slice;
+link to its dedicated category page".
+-}
+type SymbolTable = Map Text (Category, Maybe Text)
+
+{- | Everything a renderer needs to emit cross-links: the symbol table,
+the URL-shaping policy, and the depth of the page being rendered
+(used to compute relative @../@ prefixes when 'LinkBase.basePath' is
+'Nothing'). Per-entity pages and slice pages both live one directory
+deep, so @depth@ is uniformly @1@ in 'Generate'.
+-}
+data LinkContext = LinkContext
+  { symbols :: SymbolTable
+  , base :: LinkBase
+  , depth :: Int
+  }
+
+{- | Context with no symbols; produced by 'linkifyDecl' it yields the
+same plain code spans the old code emitted. Useful in 'Query' (stdout
+mode) where links are meaningless.
+-}
+emptyContext :: LinkContext
+emptyContext =
+  LinkContext
+    { symbols = Map.empty
+    , base = LinkBase{basePath = Nothing, extension = ""}
+    , depth = 0
+    }
+
+{- | URL for a name in the symbol table. Slice match → slice anchor;
+otherwise → the entity's dedicated page. 'Nothing' means the name
+isn't a known catalog symbol (so the caller leaves it as plain code).
+-}
+symbolHref :: LinkContext -> Text -> Maybe Text
+symbolHref ctx name = do
+  (cat, mq) <- Map.lookup name ctx.symbols
+  pure $ case mq of
+    Just q ->
+      sliceHref ctx.base ctx.depth q
+        <> "#"
+        <> categoryAnchorPrefix cat
+        <> "-"
+        <> name
+    Nothing -> entityHref ctx.base ctx.depth cat name
+
+{- | Render a C declaration string as inline pandoc with identifier
+substrings turned into hyperlinks when they appear in the symbol
+table. Non-identifier runs (whitespace, @*@, @[@, @,@, …) and
+unknown identifiers stay as plain @\<code\>@ spans, so the visual
+result is "the same code text, but type names are now blue and
+clickable".
+
+Identifier alphabet matches C: @[A-Za-z_][A-Za-z0-9_]*@.
+-}
+linkifyDecl :: LinkContext -> Text -> Inlines
+linkifyDecl ctx = mconcat . map renderChunk . tokenize
+  where
+    renderChunk :: Either Text Text -> Inlines
+    renderChunk (Left lit) = B.code lit
+    renderChunk (Right ident) =
+      case symbolHref ctx ident of
+        Just url -> B.link url "" (B.code ident)
+        Nothing -> B.code ident
+
+    tokenize :: Text -> [Either Text Text]
+    tokenize t
+      | Text.null t = []
+      | isIdentStart (Text.head t) =
+          let (ident, rest) = Text.span isIdentChar t
+          in Right ident : tokenize rest
+      | otherwise =
+          let (lit, rest) = Text.break isIdentStart t
+          in Left lit : tokenize rest
+
+    isIdentStart :: Char -> Bool
+    isIdentStart c = isAlpha c || c == '_'
+
+    isIdentChar :: Char -> Bool
+    isIdentChar c = isAlphaNum c || c == '_'
 
 {- | Split a qualified C name like @ImDrawList_AddCircle@ on the LAST
 underscore: @(Just "ImDrawList", "AddCircle")@. Names with no

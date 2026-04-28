@@ -24,24 +24,25 @@ module Render.Slice
 import Data.Maybe (maybeToList)
 import Data.Text (Text)
 import Render qualified
+import Render.Common (LinkContext)
 import Slice (Slice (..))
 import Text.Pandoc qualified as Pandoc
 import Text.Pandoc.Builder (Blocks)
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Walk qualified as Walk
 
-renderSlice :: Slice -> Pandoc.Pandoc
-renderSlice s =
+renderSlice :: LinkContext -> Slice -> Pandoc.Pandoc
+renderSlice ctx s =
   B.setMeta "pagetitle" (B.text s.qualifier) $
     B.doc body
   where
     body =
       B.header 1 (B.code s.qualifier)
-        <> section "Struct" (Render.renderStruct <$> maybeToList s.struct)
-        <> section "Enums" (map Render.renderEnum s.enums)
-        <> section "Functions" (map Render.renderFunction s.functions)
-        <> section "Defines" (map Render.renderDefine s.defines)
-        <> section "Typedefs" (map Render.renderTypedef s.typedefs)
+        <> section "Struct" (Render.renderStruct ctx <$> maybeToList s.struct)
+        <> section "Enums" (map (Render.renderEnum ctx) s.enums)
+        <> section "Functions" (map (Render.renderFunction ctx) s.functions)
+        <> section "Defines" (map (Render.renderDefine ctx) s.defines)
+        <> section "Typedefs" (map (Render.renderTypedef ctx) s.typedefs)
 
 section :: Text -> [Blocks] -> Blocks
 section _ [] = mempty

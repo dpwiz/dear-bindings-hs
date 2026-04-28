@@ -23,6 +23,7 @@ import Render qualified
 import Render.Common
   ( Category (..)
   , LinkBase (..)
+  , LinkContext (..)
   , categoryDir
   , categoryHref
   , categoryLabel
@@ -59,7 +60,17 @@ run catalog base format outdir = Pandoc.runIOorExplode $ do
 
   liftIO $ createDirectoryIfMissing True outdir
 
-  let allSlices = Slice.slices catalog
+  let
+    allSlices = Slice.slices catalog
+    -- Single context shared across every renderer call. Per-entity
+    -- pages and slice pages all live one directory deep, so depth = 1
+    -- works uniformly for relative URLs.
+    ctx =
+      LinkContext
+        { symbols = Slice.buildSymbolTable catalog allSlices
+        , base = base
+        , depth = 1
+        }
 
   -- Top-level index
   topText <- format.write plainOpts (rootDoc base catalog allSlices)
@@ -71,37 +82,37 @@ run catalog base format outdir = Pandoc.runIOorExplode $ do
     format
     plainOpts
     Defines
-    [(n, Render.renderDefine x) | (n, x) <- Map.toAscList catalog.defines]
+    [(n, Render.renderDefine ctx x) | (n, x) <- Map.toAscList catalog.defines]
   emitCategory
     base
     outdir
     format
     plainOpts
     Enums
-    [(n, Render.renderEnum x) | (n, x) <- Map.toAscList catalog.enums]
+    [(n, Render.renderEnum ctx x) | (n, x) <- Map.toAscList catalog.enums]
   emitCategory
     base
     outdir
     format
     plainOpts
     Typedefs
-    [(n, Render.renderTypedef x) | (n, x) <- Map.toAscList catalog.typedefs]
+    [(n, Render.renderTypedef ctx x) | (n, x) <- Map.toAscList catalog.typedefs]
   emitCategory
     base
     outdir
     format
     plainOpts
     Structs
-    [(n, Render.renderStruct x) | (n, x) <- Map.toAscList catalog.structs]
+    [(n, Render.renderStruct ctx x) | (n, x) <- Map.toAscList catalog.structs]
   emitCategory
     base
     outdir
     format
     plainOpts
     Functions
-    [(n, Render.renderFunction x) | (n, x) <- Map.toAscList catalog.functions]
+    [(n, Render.renderFunction ctx x) | (n, x) <- Map.toAscList catalog.functions]
 
-  emitSlices base outdir format plainOpts tocOpts allSlices
+  emitSlices ctx base outdir format plainOpts tocOpts allSlices
 
 emitCategory
   :: LinkBase
@@ -134,14 +145,15 @@ emitCategory base outdir format opts cat entries = do
 -- Slices
 
 emitSlices
-  :: LinkBase
+  :: LinkContext
+  -> LinkBase
   -> FilePath
   -> Format
   -> Pandoc.WriterOptions
   -> Pandoc.WriterOptions
   -> [Slice]
   -> Pandoc.PandocIO ()
-emitSlices base outdir format plainOpts tocOpts ss = do
+emitSlices ctx base outdir format plainOpts tocOpts ss = do
   let dir = outdir </> Text.unpack slicesDir
   liftIO $ createDirectoryIfMissing True dir
 
@@ -155,7 +167,7 @@ emitSlices base outdir format plainOpts tocOpts ss = do
   -- One file per slice, with ToC enabled for navigation.
   forM_ ss $ \s -> do
     let
-      doc = Render.Slice.renderSlice s
+      doc = Render.Slice.renderSlice ctx s
       path = dir </> Text.unpack (s.qualifier <> "." <> base.extension)
     text <- format.write tocOpts doc
     liftIO $ Text.writeFile path text

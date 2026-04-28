@@ -42,15 +42,22 @@ import DearBindings.JSON
   , TypeRef (..)
   , Typedef (..)
   )
-import Render.Common (Category (..), anchor, commentBlocks, sourceFooter)
+import Render.Common
+  ( Category (..)
+  , LinkContext
+  , anchor
+  , commentBlocks
+  , linkifyDecl
+  , sourceFooter
+  )
 import Text.Pandoc.Builder (Blocks)
 import Text.Pandoc.Builder qualified as B
 
 -- ---------------------------------------------------------------------------
 -- Define
 
-renderDefine :: Define -> Blocks
-renderDefine d =
+renderDefine :: LinkContext -> Define -> Blocks
+renderDefine _ctx d =
   mconcat
     [ B.headerWith (anchor Defines d.name) 1 (B.code d.name)
     , commentBlocks d.comments
@@ -62,8 +69,8 @@ renderDefine d =
 -- ---------------------------------------------------------------------------
 -- Enum
 
-renderEnum :: Enum_ -> Blocks
-renderEnum e =
+renderEnum :: LinkContext -> Enum_ -> Blocks
+renderEnum ctx e =
   mconcat
     [ B.headerWith (anchor Enums e.name) 1 (B.code e.name)
     , commentBlocks e.comments
@@ -78,7 +85,7 @@ renderEnum e =
       | e.isFlagsEnum = B.para (B.emph (B.text "Flags enum"))
       | otherwise = mempty
     storageLine = case e.storageType of
-      Just t -> B.para $ B.text "storage type: " <> B.code t.declaration
+      Just t -> B.para $ B.text "storage type: " <> linkifyDecl ctx t.declaration
       Nothing -> mempty
 
 elementsTable :: [EnumElement] -> Blocks
@@ -99,8 +106,8 @@ elementsTable xs =
 -- ---------------------------------------------------------------------------
 -- Typedef
 
-renderTypedef :: Typedef -> Blocks
-renderTypedef t =
+renderTypedef :: LinkContext -> Typedef -> Blocks
+renderTypedef _ctx t =
   mconcat
     [ B.headerWith (anchor Typedefs t.name) 1 (B.code t.name)
     , commentBlocks t.comments
@@ -112,14 +119,14 @@ renderTypedef t =
 -- ---------------------------------------------------------------------------
 -- Struct
 
-renderStruct :: Struct -> Blocks
-renderStruct s =
+renderStruct :: LinkContext -> Struct -> Blocks
+renderStruct ctx s =
   mconcat
     [ B.headerWith (anchor Structs s.name) 1 $
         B.text s.kind <> B.space <> B.code s.name
     , commentBlocks s.comments
     , flagsLine
-    , fieldsList s.fields
+    , fieldsList ctx s.fields
     , conditionalBlocks s.conditionals
     , sourceFooter s.sourceLocation
     ]
@@ -128,13 +135,13 @@ renderStruct s =
       | s.forwardDeclaration = B.para (B.emph (B.text "Forward declaration"))
       | otherwise = mempty
 
-fieldsList :: [StructField] -> Blocks
-fieldsList [] = mempty
-fieldsList fields = B.definitionList (map describe fields)
+fieldsList :: LinkContext -> [StructField] -> Blocks
+fieldsList _ [] = mempty
+fieldsList ctx fields = B.definitionList (map describe fields)
   where
     describe :: StructField -> (B.Inlines, [Blocks])
     describe f =
-      ( B.code (f.name <> bitfield f) <> B.text " : " <> B.code f.type_.declaration
+      ( B.code (f.name <> bitfield f) <> B.text " : " <> linkifyDecl ctx f.type_.declaration
       , filter
           (/= mempty)
           [ commentBlocks f.comments
@@ -148,13 +155,13 @@ fieldsList fields = B.definitionList (map describe fields)
 -- ---------------------------------------------------------------------------
 -- Function
 
-renderFunction :: Function -> Blocks
-renderFunction f =
+renderFunction :: LinkContext -> Function -> Blocks
+renderFunction ctx f =
   mconcat
     [ B.headerWith (anchor Functions f.name) 1 (B.code f.name)
     , commentBlocks f.comments
     , B.codeBlock (signature f)
-    , argList f.arguments
+    , argList ctx f.arguments
     , helperBadges f
     , conditionalBlocks f.conditionals
     , sourceFooter f.sourceLocation
@@ -186,9 +193,9 @@ signature f =
               (False, True) -> decl
               (False, False) -> decl <> " " <> nm
 
-argList :: [Argument] -> Blocks
-argList [] = mempty
-argList args = B.definitionList (map describe (filter (not . isVarargs) args))
+argList :: LinkContext -> [Argument] -> Blocks
+argList _ [] = mempty
+argList ctx args = B.definitionList (map describe (filter (not . isVarargs) args))
   where
     isVarargs :: Argument -> Bool
     isVarargs a = a.isVarargs
@@ -196,7 +203,7 @@ argList args = B.definitionList (map describe (filter (not . isVarargs) args))
     describe a =
       ( B.code (fromMaybe "(unnamed)" a.name)
           <> B.text " : "
-          <> B.code (maybe "..." (.declaration) a.type_)
+          <> maybe (B.code "...") (linkifyDecl ctx . (.declaration)) a.type_
       , filter
           (/= mempty)
           [ instanceLine a
