@@ -8,21 +8,40 @@
 qualifier: the struct (if one exists with that name), the methods
 hanging off it, the flag-enums in its orbit, and any defines / typedefs
 prefixed with the qualifier. It's the "by namespace / class" lens on
-the catalog, complementing the per-category indices in "Generate".
+the catalog, complementing the per-category indices used by the doc
+generator.
+
+Two entry points:
+
+* 'slices' — drops single-entity slices. The doc generator uses this
+  because a one-element slice page just duplicates the entity's
+  category-index entry.
+* 'slicesAll' — keeps every slice, including singletons. The FFI
+  generator uses this because every C symbol must end up bound in
+  some module.
+
+The membership predicates ('structInSlice' & friends) are exported so
+downstream tools can compute "which slice does this name belong to?"
+without re-deriving the rule.
 -}
-module Slice
+module DearBindings.Slice
   ( Slice (..)
   , slices
+  , slicesAll
   , sliceSize
-  , buildSymbolTable
+
+    -- * Membership predicates
+  , structInSlice
+  , functionInSlice
+  , enumInSlice
+  , typedefInSlice
+  , defineInSlice
   ) where
 
-import Catalog (Catalog (..))
-import Data.List (maximumBy)
+import DearBindings.Catalog (Catalog (..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, mapMaybe)
-import Data.Ord (comparing)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
@@ -33,7 +52,7 @@ import DearBindings.JSON
   , Struct (..)
   , Typedef (..)
   )
-import Render.Common (Category (..), SymbolTable, splitQualifier)
+import DearBindings.Qualifier (splitQualifier)
 
 data Slice = Slice
   { qualifier :: Text
@@ -47,7 +66,7 @@ data Slice = Slice
 -- ---------------------------------------------------------------------------
 -- Membership predicates: do entities of a given category, named @n@,
 -- belong to the slice for qualifier @q@? Single-sourced here so that
--- 'buildSlice' (page contents) and 'buildSymbolTable' (link targets)
+-- 'buildSlice' (page contents) and downstream symbol-table builders
 -- agree on the rule.
 
 structInSlice :: Text -> Text -> Bool
@@ -75,7 +94,8 @@ defineInSlice q n =
 {- | Compute every qualifier slice from a 'Catalog', sorted alphabetically.
 Slices that contain only a single entity are dropped — they'd just
 duplicate the entity's own page in the matching category index, which
-is already reachable via @structs\/X.html@ etc.
+is already reachable via @structs\/X.html@ etc. Use 'slicesAll' if
+you want every slice including singletons.
 -}
 slices :: Catalog -> [Slice]
 slices c =
@@ -83,6 +103,17 @@ slices c =
   | q <- Set.toAscList (sliceKeys c)
   , let s = buildSlice c q
   , sliceSize s > 1
+  ]
+
+{- | Like 'slices' but keeps single-entity slices. Use this when every
+qualifier needs to map to some output, even if there's only one
+entity in it (e.g. FFI binding generation, where every C symbol
+must be bound somewhere).
+-}
+slicesAll :: Catalog -> [Slice]
+slicesAll c =
+  [ buildSlice c q
+  | q <- Set.toAscList (sliceKeys c)
   ]
 
 {- | Total number of entities in a slice (struct counts as one if
@@ -121,31 +152,3 @@ buildSlice c q =
 
 filterMap :: (Text -> Bool) -> Map Text a -> [a]
 filterMap p m = [v | (n, v) <- Map.toAscList m, p n]
-
-{- | Map every catalog name to its category and the qualifier of the
-most-specific kept slice that contains it (if any). Used by the
-renderers to turn type names in signatures into hyperlinks: a hit
-with a 'Just' qualifier points at the slice anchor, a hit with
-'Nothing' points at the entity's dedicated category page.
-
-"Most specific" = the longest qualifier whose membership predicate
-matches. So @ImGuiViewportFlags_@ resolves to the @ImGuiViewport@
-slice rather than the @ImGui@ slice (both are prefix matches).
--}
-buildSymbolTable :: Catalog -> [Slice] -> SymbolTable
-buildSymbolTable c kept =
-  Map.fromList $
-    concat
-      [ [(n, (Defines, best defineInSlice n)) | n <- Map.keys c.defines]
-      , [(n, (Enums, best enumInSlice n)) | n <- Map.keys c.enums]
-      , [(n, (Typedefs, best typedefInSlice n)) | n <- Map.keys c.typedefs]
-      , [(n, (Structs, best structInSlice n)) | n <- Map.keys c.structs]
-      , [(n, (Functions, best functionInSlice n)) | n <- Map.keys c.functions]
-      ]
-  where
-    keptQuals = [s.qualifier | s <- kept]
-    best :: (Text -> Text -> Bool) -> Text -> Maybe Text
-    best p n =
-      case filter (\q -> p q n) keptQuals of
-        [] -> Nothing
-        qs -> Just (maximumBy (comparing Text.length) qs)

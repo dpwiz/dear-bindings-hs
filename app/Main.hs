@@ -5,9 +5,9 @@
 
 module Main (main) where
 
-import Catalog qualified
 import Cli (Command (..), GenerateOptions (..), QueryOptions (..))
 import Cli qualified
+import DearBindings.Catalog qualified as Catalog
 import DearBindings.JSON.IO qualified as JSON
 import Generate qualified
 import Options.Applicative (execParser)

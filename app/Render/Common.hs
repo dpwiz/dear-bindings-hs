@@ -37,6 +37,7 @@ module Render.Common
   , emptyContext
   , symbolHref
   , linkifyDecl
+  , buildSymbolTable
 
     -- * Names / qualifiers
   , splitQualifier
@@ -51,22 +52,27 @@ module Render.Common
   ) where
 
 import Data.Char (isAlpha, isAlphaNum)
-import Data.List (intersperse, sortOn)
+import Data.List (intersperse, maximumBy, sortOn)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes)
+import Data.Ord (comparing)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import DearBindings.Catalog (Catalog (..))
 import DearBindings.JSON (Comments (..), SourceLocation (..))
+import DearBindings.Qualifier (Category (..), splitQualifier)
+import DearBindings.Slice
+  ( Slice (..)
+  , defineInSlice
+  , enumInSlice
+  , functionInSlice
+  , structInSlice
+  , typedefInSlice
+  )
 import Text.Pandoc.Builder (Blocks, Inlines)
 import Text.Pandoc.Builder qualified as B
 import Text.Pandoc.Definition (Attr)
-
-{- | The five top-level categories an entity can live under. Mirrors the
-five fields of 'DearBindings.JSON.Header' one-to-one.
--}
-data Category = Defines | Enums | Typedefs | Structs | Functions
-  deriving (Eq, Ord, Show, Bounded, Enum)
 
 categoryDir :: Category -> Text
 categoryDir = \case
@@ -233,18 +239,6 @@ linkifyDecl ctx = mconcat . map renderChunk . tokenize
     isIdentChar :: Char -> Bool
     isIdentChar c = isAlphaNum c || c == '_'
 
-{- | Split a qualified C name like @ImDrawList_AddCircle@ on the LAST
-underscore: @(Just "ImDrawList", "AddCircle")@. Names with no
-underscore (@ImVec2@) or a trailing underscore (@ImGuiWindowFlags_@,
-the dear-bindings convention for flag-enum tags) are treated as
-unqualified — they show up under no header on the index page.
--}
-splitQualifier :: Text -> (Maybe Text, Text)
-splitQualifier name = case Text.breakOnEnd "_" name of
-  ("", _) -> (Nothing, name)
-  (_, "") -> (Nothing, name)
-  (qual, n) -> (Just (Text.dropEnd 1 qual), n)
-
 {- | Group a list of names by their qualifier. The 'Nothing' bucket
 (unqualified names) sorts first; remaining buckets are alphabetical.
 Each value list is @(full_name, short_name)@ sorted by short name.
@@ -303,3 +297,31 @@ breadcrumbs items =
     render :: (Inlines, Maybe Text) -> Inlines
     render (label, Nothing) = label
     render (label, Just url) = B.link url "" label
+
+{- | Map every catalog name to its category and the qualifier of the
+most-specific kept slice that contains it (if any). Used by the
+renderers to turn type names in signatures into hyperlinks: a hit
+with a 'Just' qualifier points at the slice anchor, a hit with
+'Nothing' points at the entity's dedicated category page.
+
+"Most specific" = the longest qualifier whose membership predicate
+matches. So @ImGuiViewportFlags_@ resolves to the @ImGuiViewport@
+slice rather than the @ImGui@ slice (both are prefix matches).
+-}
+buildSymbolTable :: Catalog -> [Slice] -> SymbolTable
+buildSymbolTable c kept =
+  Map.fromList $
+    concat
+      [ [(n, (Defines, best defineInSlice n)) | n <- Map.keys c.defines]
+      , [(n, (Enums, best enumInSlice n)) | n <- Map.keys c.enums]
+      , [(n, (Typedefs, best typedefInSlice n)) | n <- Map.keys c.typedefs]
+      , [(n, (Structs, best structInSlice n)) | n <- Map.keys c.structs]
+      , [(n, (Functions, best functionInSlice n)) | n <- Map.keys c.functions]
+      ]
+  where
+    keptQuals = [s.qualifier | s <- kept]
+    best :: (Text -> Text -> Bool) -> Text -> Maybe Text
+    best p n =
+      case filter (\q -> p q n) keptQuals of
+        [] -> Nothing
+        qs -> Just (maximumBy (comparing Text.length) qs)

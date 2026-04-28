@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Download latest dear_bindings releases (vanilla + docking) into a target directory."""
 
+raise Exception("XXX: Do not use, the releases are missing critical files (?)")
+please_dont()
+
 import argparse
 import json
 import os

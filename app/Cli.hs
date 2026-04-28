@@ -18,12 +18,12 @@ module Cli
   , parserInfo
   ) where
 
-import Catalog (Filter (..))
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
+import DearBindings.Catalog (Filter (..))
+import DearBindings.Qualifier (Category (..))
 import Options.Applicative
-import Render.Common (Category (..))
 import Writer (Format)
 import Writer qualified
 

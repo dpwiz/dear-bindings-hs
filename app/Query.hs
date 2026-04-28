@@ -11,10 +11,10 @@ module Query
   ( run
   ) where
 
-import Catalog (Catalog (..))
 import Control.Monad.IO.Class (liftIO)
 import Data.Map.Strict qualified as Map
 import Data.Text.IO qualified as Text
+import DearBindings.Catalog (Catalog (..))
 import Render qualified
 import Render.Common (emptyContext)
 import Text.Pandoc qualified as Pandoc

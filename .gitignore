@@ -1,6 +1,7 @@
 dear_bindings/
 output/
 dist/
+dist-ffi/
 
 dist-newstyle/
 .stack-work/

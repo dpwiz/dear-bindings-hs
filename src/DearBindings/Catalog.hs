@@ -9,7 +9,7 @@ is keyed by entity name within each category; dear-bindings makes
 those names globally unique within a release, so a flat merge is
 safe.
 -}
-module Catalog
+module DearBindings.Catalog
   ( Catalog (..)
   , empty
   , fromHeader
@@ -36,7 +36,7 @@ import DearBindings.JSON
   , Struct (..)
   , Typedef (..)
   )
-import Render.Common (Category (..))
+import DearBindings.Qualifier (Category (..))
 
 data Catalog = Catalog
   { defines :: Map Text Define

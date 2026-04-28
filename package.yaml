@@ -19,10 +19,21 @@ extra-source-files:
 # common to point users to the README.md file.
 description:         Please see the README on GitHub at <https://github.com/dpwiz/dear-bindings-aeson#readme>
 
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DuplicateRecordFields
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
+- OverloadedStrings
+
 dependencies:
 - base >= 4.7 && < 5
 - aeson >= 2.2
 - bytestring
+- containers
 - text
 
 ghc-options:
@@ -65,6 +76,25 @@ executables:
     - optparse-applicative
     - pandoc
     - pandoc-types
+    - text
+
+  dear-bindings-ffi:
+    main:                Main.hs
+    source-dirs:         app-ffi
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    when:
+    - condition: "!flag(executables)"
+      buildable: false
+    dependencies:
+    - dear-bindings-aeson
+    - bytestring
+    - containers
+    - directory
+    - filepath
+    - optparse-applicative
     - text
 
 tests:

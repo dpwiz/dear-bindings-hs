@@ -11,7 +11,6 @@ module Generate
   ( run
   ) where
 
-import Catalog (Catalog (..))
 import Control.Monad (forM_)
 import Control.Monad.IO.Class (liftIO)
 import Data.Map.Strict qualified as Map
@@ -19,12 +18,16 @@ import Data.Maybe (maybeToList)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.IO qualified as Text
+import DearBindings.Catalog (Catalog (..))
+import DearBindings.Slice (Slice (..))
+import DearBindings.Slice qualified as Slice
 import Render qualified
 import Render.Common
   ( Category (..)
   , LinkBase (..)
   , LinkContext (..)
   , breadcrumbs
+  , buildSymbolTable
   , categoryDir
   , categoryHref
   , categoryLabel
@@ -36,8 +39,6 @@ import Render.Common
   , slicesIndexHref
   )
 import Render.Slice qualified
-import Slice (Slice (..))
-import Slice qualified
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((</>))
 import Text.Pandoc qualified as Pandoc
@@ -69,7 +70,7 @@ run catalog base format outdir = Pandoc.runIOorExplode $ do
     -- works uniformly for relative URLs.
     ctx =
       LinkContext
-        { symbols = Slice.buildSymbolTable catalog allSlices
+        { symbols = buildSymbolTable catalog allSlices
         , base = base
         , depth = 1
         }

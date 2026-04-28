@@ -30,6 +30,7 @@ flag executables
 
 library
   exposed-modules:
+      DearBindings.Catalog
       DearBindings.JSON
       DearBindings.JSON.Comments
       DearBindings.JSON.Conditional
@@ -43,37 +44,52 @@ library
       DearBindings.JSON.SourceLocation
       DearBindings.JSON.Typedef
       DearBindings.JSON.Types
+      DearBindings.Qualifier
+      DearBindings.Slice
   other-modules:
       Paths_dear_bindings_aeson
   autogen-modules:
       Paths_dear_bindings_aeson
   hs-source-dirs:
       src
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       aeson >=2.2
     , base >=4.7 && <5
     , bytestring
+    , containers
     , text
-  default-language: Haskell2010
+  default-language: GHC2021
 
 executable dear-bindings-doc
   main-is: Main.hs
   other-modules:
-      Catalog
       Cli
       Generate
       Query
       Render
       Render.Common
       Render.Slice
-      Slice
       Writer
       Paths_dear_bindings_aeson
   autogen-modules:
       Paths_dear_bindings_aeson
   hs-source-dirs:
       app
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson >=2.2
@@ -87,7 +103,46 @@ executable dear-bindings-doc
     , pandoc
     , pandoc-types
     , text
-  default-language: Haskell2010
+  default-language: GHC2021
+  if !flag(executables)
+    buildable: False
+
+executable dear-bindings-ffi
+  main-is: Main.hs
+  other-modules:
+      Cli
+      FFI.Emit
+      FFI.HType
+      FFI.Module
+      FFI.Run
+      FFI.Skip
+      FFI.Slicing
+      FFI.Whitebox
+      FFI.Wrapper
+      Paths_dear_bindings_aeson
+  autogen-modules:
+      Paths_dear_bindings_aeson
+  hs-source-dirs:
+      app-ffi
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson >=2.2
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , dear-bindings-aeson
+    , directory
+    , filepath
+    , optparse-applicative
+    , text
+  default-language: GHC2021
   if !flag(executables)
     buildable: False
 
@@ -101,15 +156,23 @@ test-suite dear-bindings-aeson-test
       Paths_dear_bindings_aeson
   hs-source-dirs:
       test
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
     , base >=4.7 && <5
     , bytestring
+    , containers
     , dear-bindings-aeson
     , directory
     , filepath
     , tasty
     , tasty-hunit
     , text
-  default-language: Haskell2010
+  default-language: GHC2021

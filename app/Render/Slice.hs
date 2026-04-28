@@ -23,9 +23,9 @@ module Render.Slice
 
 import Data.Maybe (maybeToList)
 import Data.Text (Text)
+import DearBindings.Slice (Slice (..))
 import Render qualified
 import Render.Common (LinkContext)
-import Slice (Slice (..))
 import Text.Pandoc qualified as Pandoc
 import Text.Pandoc.Builder (Blocks)
 import Text.Pandoc.Builder qualified as B
