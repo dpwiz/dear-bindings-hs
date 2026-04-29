@@ -1,4 +1,3 @@
-
 {-| Decide which catalog structs we'll render as Haskell records
 with full 'Storable' instances (peek/poke per field), instead of
 opaque @data X@. Whiteboxing a struct lets it cross the @capi@ FFI
@@ -29,9 +28,10 @@ import DearBindings.JSON
 import DearBindings.JSON.Types qualified
 import FFI.HType (typeKindContainsInlineAggregate)
 
--- | All catalog structs we plan to whitebox in this run. v0.1 picks
--- the by-value subset (those that need to cross @capi@ by value)
--- intersected with the tractable-shape filter.
+{- | All catalog structs we plan to whitebox in this run. v0.1 picks
+the by-value subset (those that need to cross @capi@ by value)
+intersected with the tractable-shape filter.
+-}
 whiteboxSet :: Catalog -> Set Text
 whiteboxSet c =
   Set.fromList

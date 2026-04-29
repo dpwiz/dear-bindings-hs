@@ -1,4 +1,3 @@
-
 {-| Translate a slice qualifier into a Haskell module name and the
 on-disk path of the corresponding @.hsc@ file. The synthetic root
 slice (qualifier @""@) maps to the module-root itself; every other
@@ -13,7 +12,7 @@ module FFI.Module
 import Data.Char (isAlphaNum, isUpper)
 import Data.Text (Text)
 import Data.Text qualified as Text
-import System.FilePath (joinPath, (</>), (<.>))
+import System.FilePath (joinPath, (<.>), (</>))
 
 -- | @qualifierToModule root qualifier@ produces the dotted Haskell module name.
 qualifierToModule :: Text -> Text -> Text
@@ -27,9 +26,11 @@ become path separators.
 -}
 qualifierToPath :: FilePath -> Text -> Text -> FilePath
 qualifierToPath outDir root q =
-  let m = qualifierToModule root q
-      parts = map Text.unpack (Text.splitOn "." m)
-  in outDir </> joinPath parts <.> "hsc"
+  let
+    m = qualifierToModule root q
+    parts = map Text.unpack (Text.splitOn "." m)
+  in
+    outDir </> joinPath parts <.> "hsc"
 
 {- | A Haskell module-name component must start with an uppercase letter
 and contain only @[A-Za-z0-9']@ thereafter. C-side qualifiers

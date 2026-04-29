@@ -1,4 +1,3 @@
-
 {-| FFI-specific routing of catalog entities into modules.
 
 Two-layer layout:
@@ -41,6 +40,7 @@ import DearBindings.JSON
   ( Define (..)
   , Enum_ (..)
   , Function (..)
+  , SourceLocation (..)
   , Struct (..)
   , Typedef (..)
   )
@@ -50,8 +50,9 @@ import FFI.Module (isLegalModuleComponent)
 
 data EmitGroup = EmitGroup
   { qualifier :: Text
-  -- ^ Empty for the synthetic root group; otherwise a legal Haskell
-  -- module component.
+  {- ^ Empty for the synthetic root group; otherwise a legal Haskell
+  module component.
+  -}
   , structs :: [Struct]
   , enums :: [Enum_]
   , functions :: [Function]
@@ -69,25 +70,35 @@ groupTotal g =
     + length g.defines
     + length g.typedefs
 
-{- | Tunables for 'routeEverything'.
--}
+-- | Tunables for 'routeEverything'.
 data RouteOptions = RouteOptions
-  { implMode :: Bool
-  -- ^ When true, the generator is producing an impl package:
-  -- forward-declared structs are dropped from the local @typesGroup@
-  -- (they live in the external core package's Types module). A
-  -- typedef whose name shadows a forward-declared struct is dropped
-  -- too, since the core's full struct definition supersedes both.
+  { externalNames :: Set.Set Text
+  {- ^ Names of types provided by an external module (e.g. the core
+  package's @Types@ module, or a third-party Haskell binding).
+  Forward-declared structs and typedefs whose names are in this
+  set are dropped from the local types group — they're imported
+  rather than redeclared. Anything not in the set stays local
+  (impl-owned opaque types or impl-only typedefs). Empty in core
+  mode (no externals).
+  -}
+  , unmappedExternalNames :: Set.Set Text
+  {- ^ TKUser names that are referenced by the catalog's functions or
+  struct fields but NOT defined locally, NOT in 'externalNames',
+  and NOT in the alias map. The router emits a synthetic opaque
+  @forward_declaration@ struct for each so the generated Haskell
+  type-checks (every type reference resolves to a local @data X@).
+  -}
   }
   deriving (Eq, Show)
 
 {- | Route every catalog entity into an 'EmitGroup'. Guarantees:
 
 * Every relevant entity appears in exactly one returned group.
-  In core mode (@implMode = False@), every entity of every category
-  is routed (callers can sanity-check via @sum (map groupTotal …)
-  == Catalog.size@). In impl mode, forward-declared structs and
-  shadowing typedefs are intentionally dropped — the coverage check
+  In core mode (@externalNames = empty@), every entity of every
+  category is routed (callers can sanity-check via
+  @sum (map groupTotal …) == Catalog.size@). In impl mode,
+  forward-declared structs and typedefs whose names match
+  'externalNames' are intentionally dropped — the coverage check
   has to subtract those.
 * Each non-root group's @qualifier@ is a legal Haskell module
   component.
@@ -114,21 +125,27 @@ routeEverything ropts c =
         , typedefs = []
         }
 
-    -- In impl mode, forward-declared structs (e.g. ImDrawData in
-    -- the impl JSON) are placeholders for types defined in the
-    -- core package. Drop them to avoid redeclaring the same
-    -- @data X@ name. dear_bindings also emits typedef restatements
-    -- of core typedefs (e.g. @typedef ImDrawIdx@ inside opengl3) —
-    -- treat all impl-side typedefs as redundant for v0.1. (If a
-    -- future impl needs a uniquely local typedef, switch to a
-    -- name-driven filter loaded from the external JSON.)
-    keepStruct s = not (ropts.implMode && s.forwardDeclaration)
-    keepTypedef _ = not ropts.implMode
+    -- Drop a forward-declared struct iff its name is provided by an
+    -- external module (e.g. ImDrawData in the impl JSON, defined in
+    -- the core's Types module). Forward decls not in the external
+    -- set are impl-owned opaque types and stay as @data X@ here
+    -- (e.g. GLFWwindow in the glfw impl). Same name-driven rule for
+    -- typedefs: drop @typedef ImDrawIdx@ when the core defines it,
+    -- but keep impl-only typedefs.
+    keepStruct s = not (s.forwardDeclaration && Set.member s.name ropts.externalNames)
+    keepTypedef t = not (Set.member t.name ropts.externalNames)
+
+    -- TKUser names reachable from the catalog that don't resolve via
+    -- the local catalog, an external module, or the alias map become
+    -- synthetic opaque structs in the local types group. Without this,
+    -- functions referencing e.g. @VkAllocationCallbacks@ via @Ptr@
+    -- would emit a bare @VkAllocationCallbacks@ that doesn't resolve.
+    syntheticOpaques = map synthOpaque (Set.toAscList ropts.unmappedExternalNames)
 
     typesGroup =
       EmitGroup
         { qualifier = typesQualifier
-        , structs = filter keepStruct (Map.elems c.structs)
+        , structs = syntheticOpaques <> filter keepStruct (Map.elems c.structs)
         , enums = Map.elems c.enums
         , functions = []
         , defines = Map.elems c.defines
@@ -137,9 +154,30 @@ routeEverything ropts c =
   in
     filter (\g -> groupTotal g > 0) (typesGroup : map fnGroupAt fnQualifiers)
 
--- | The qualifier (and module-component) used for the shared types
--- module. Slice modules import @\<root\>.\<typesQualifier\>@ to see
--- everything declared here.
+{- | Build a synthetic forward-declared 'Struct' record for an unmapped
+external TKUser name. Only the @name@ and @forwardDeclaration@ fields
+matter for the emit-as-opaque-data path; everything else is filler.
+-}
+synthOpaque :: Text -> Struct
+synthOpaque n =
+  Struct
+    { name = n
+    , originalFullyQualifiedName = n
+    , kind = "struct"
+    , byValue = False
+    , forwardDeclaration = True
+    , isAnonymous = False
+    , isInternal = False
+    , fields = []
+    , comments = Nothing
+    , conditionals = Nothing
+    , sourceLocation = SourceLocation{filename = "<synthetic>", line = Nothing}
+    }
+
+{- | The qualifier (and module-component) used for the shared types
+module. Slice modules import @\<root\>.\<typesQualifier\>@ to see
+everything declared here.
+-}
 typesQualifier :: Text
 typesQualifier = "Types"
 

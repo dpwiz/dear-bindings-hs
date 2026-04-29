@@ -41,8 +41,20 @@ case "${1:-}" in
     ;;
 esac
 
-backend_dir="generated/backends/dear-imgui-raw-impl-opengl3"
-backend_json="generated/backends/dcimgui_impl_opengl3.json"
+opengl3_dir="generated/backends/dear-imgui-raw-impl-opengl3"
+opengl3_json="generated/backends/dcimgui_impl_opengl3.json"
+
+glfw_dir="generated/backends/dear-imgui-raw-impl-glfw"
+glfw_json="generated/backends/dcimgui_impl_glfw.json"
+
+vulkan_dir="generated/backends/dear-imgui-raw-impl-vulkan"
+vulkan_aliases="generated/backends/vulkan_type_aliases.json"
+
+# Common --external-types-json source for all impl regens. Vanilla
+# and docking core JSONs declare the same set of struct/typedef/enum
+# names (only the function lists and field counts differ), so either
+# works as the "external names" reference for impl-mode drops.
+external_core_json="dear_bindings/vanilla/dcimgui_nodefaultargfunctions.json"
 
 echo "==> Building dear-bindings-ffi"
 stack build --flag dear-bindings-aeson:executables >/dev/null
@@ -77,32 +89,107 @@ for flavor in "${flavors[@]}"; do
   echo "==> ${flavor}: core OK"
 done
 
-# Regenerate the (single) backend package — flavor-neutral; the
-# Haskell modules and shim cpp are identical across cores. The
-# imgui-side .cpp variants for each flavor are vendored separately
-# and selected via cabal flag at consume time.
-if [ ! -f "${backend_dir}/package.yaml" ]; then
-  echo "==> backend: ${backend_dir}/package.yaml missing — set up the package first" >&2
+# Regenerate flavor-neutral backend packages. Each ships one
+# Haskell module tree (output of the generator on the single shared
+# JSON) plus per-flavor imgui_impl_*.cpp variants, selected via
+# cabal flag at consume time. impl-{opengl3,glfw} both follow this
+# pattern: dear-bindings emits identical .cpp/.h for vanilla and
+# docking, so we generate once.
+
+# impl-opengl3
+if [ ! -f "${opengl3_dir}/package.yaml" ]; then
+  echo "==> opengl3: ${opengl3_dir}/package.yaml missing — set up the package first" >&2
   exit 1
 fi
-if [ ! -f "${backend_dir}/cbits/imgui_impl_opengl3_vanilla.cpp" ] || \
-   [ ! -f "${backend_dir}/cbits/imgui_impl_opengl3_docking.cpp" ]; then
-  echo "==> backend: vendor imgui_impl_opengl3_{vanilla,docking}.cpp into ${backend_dir}/cbits/ first" >&2
+if [ ! -f "${opengl3_dir}/cbits/imgui_impl_opengl3_vanilla.cpp" ] || \
+   [ ! -f "${opengl3_dir}/cbits/imgui_impl_opengl3_docking.cpp" ]; then
+  echo "==> opengl3: vendor imgui_impl_opengl3_{vanilla,docking}.cpp into ${opengl3_dir}/cbits/ first" >&2
   exit 1
 fi
-if [ ! -f "$backend_json" ]; then
-  echo "==> backend: input JSON missing at $backend_json" >&2
+if [ ! -f "$opengl3_json" ]; then
+  echo "==> opengl3: input JSON missing at $opengl3_json" >&2
   exit 1
 fi
 
-echo "==> backend: regenerating impl-opengl3 into ${backend_dir}/src"
-rm -rf "${backend_dir}/src" "${backend_dir}/cbits/DearImGuiWrappers.cpp" "${backend_dir}/cbits/DearImGuiWrappers.h"
+echo "==> opengl3: regenerating impl into ${opengl3_dir}/src"
+rm -rf "${opengl3_dir}/src" "${opengl3_dir}/cbits/DearImGuiWrappers.cpp" "${opengl3_dir}/cbits/DearImGuiWrappers.h"
 stack exec -- dear-bindings-ffi \
-  --input "$backend_json" \
+  --input "$opengl3_json" \
   --module-root DearImGui.Raw.Impl.OpenGL3 \
   --header dcimgui_impl_opengl3.h \
   --external-types-module DearImGui.Raw.Types \
-  -o "${backend_dir}"
+  --external-types-json "$external_core_json" \
+  -o "${opengl3_dir}"
+
+# impl-glfw
+if [ ! -f "${glfw_dir}/package.yaml" ]; then
+  echo "==> glfw: ${glfw_dir}/package.yaml missing — set up the package first" >&2
+  exit 1
+fi
+if [ ! -f "${glfw_dir}/cbits/imgui_impl_glfw_vanilla.cpp" ] || \
+   [ ! -f "${glfw_dir}/cbits/imgui_impl_glfw_docking.cpp" ]; then
+  echo "==> glfw: vendor imgui_impl_glfw_{vanilla,docking}.cpp into ${glfw_dir}/cbits/ first" >&2
+  exit 1
+fi
+if [ ! -f "$glfw_json" ]; then
+  echo "==> glfw: input JSON missing at $glfw_json" >&2
+  exit 1
+fi
+
+echo "==> glfw: regenerating impl into ${glfw_dir}/src"
+rm -rf "${glfw_dir}/src" "${glfw_dir}/cbits/DearImGuiWrappers.cpp" "${glfw_dir}/cbits/DearImGuiWrappers.h"
+stack exec -- dear-bindings-ffi \
+  --input "$glfw_json" \
+  --module-root DearImGui.Raw.Impl.GLFW \
+  --header dcimgui_impl_glfw.h \
+  --external-types-module DearImGui.Raw.Types \
+  --external-types-json "$external_core_json" \
+  -o "${glfw_dir}"
+
+# impl-vulkan is NOT flavor-neutral: docking adds multi-viewport
+# fields/functions, and the vendored imgui_impl_vulkan.{cpp,h} differs
+# between flavors. Generate per-flavor subtrees and let cabal flags
+# select one at consume time.
+if [ ! -f "${vulkan_dir}/package.yaml" ]; then
+  echo "==> vulkan: ${vulkan_dir}/package.yaml missing — set up the package first" >&2
+  exit 1
+fi
+if [ ! -f "${vulkan_dir}/imgui-impl/imgui_impl_vulkan_vanilla.cpp" ] || \
+   [ ! -f "${vulkan_dir}/imgui-impl/imgui_impl_vulkan_docking.cpp" ]; then
+  echo "==> vulkan: vendor imgui_impl_vulkan_{vanilla,docking}.cpp into ${vulkan_dir}/imgui-impl/ first" >&2
+  exit 1
+fi
+if [ ! -f "$vulkan_aliases" ]; then
+  echo "==> vulkan: type-aliases JSON missing at $vulkan_aliases" >&2
+  exit 1
+fi
+
+for vfl in vanilla docking; do
+  v_subdir="${vulkan_dir}/flavor-${vfl}"
+  v_json="dear_bindings/${vfl}/dcimgui_impl_vulkan.json"
+  v_external="dear_bindings/${vfl}/dcimgui_nodefaultargfunctions.json"
+
+  if [ ! -f "$v_json" ]; then
+    echo "==> vulkan: ${vfl} input JSON missing at $v_json" >&2
+    exit 1
+  fi
+  if [ ! -f "${v_subdir}/cbits/dcimgui_impl_vulkan.cpp" ] || \
+     [ ! -f "${v_subdir}/cbits/imgui_impl_vulkan.h" ]; then
+    echo "==> vulkan: ${vfl} cbits not vendored under ${v_subdir}/cbits/" >&2
+    exit 1
+  fi
+
+  echo "==> vulkan/${vfl}: regenerating impl into ${v_subdir}/src"
+  rm -rf "${v_subdir}/src" "${v_subdir}/cbits/DearImGuiWrappers.cpp" "${v_subdir}/cbits/DearImGuiWrappers.h"
+  stack exec -- dear-bindings-ffi \
+    --input "$v_json" \
+    --module-root DearImGui.Raw.Impl.Vulkan \
+    --header dcimgui_impl_vulkan.h \
+    --external-types-module DearImGui.Raw.Types \
+    --external-types-json "$v_external" \
+    --type-aliases-json "$vulkan_aliases" \
+    -o "${v_subdir}"
+done
 
 # Build each requested flavor's consumer test. This transitively
 # builds the backend against the chosen core (via cabal flags) and

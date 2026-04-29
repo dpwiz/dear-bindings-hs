@@ -1,4 +1,3 @@
-
 {-| Render an 'EmitGroup' to the textual contents of a single @.hsc@
 file. Skipped entities are folded out and contribute to the
 returned 'SkipCounters'.
@@ -24,7 +23,7 @@ import DearBindings.JSON
   , Typedef (..)
   )
 import DearBindings.JSON.Types qualified
-import FFI.HType (renderArgType, renderHType, renderReturnType)
+import FFI.HType (TypeAliasMap, renderArgType, renderHType, renderReturnType)
 import FFI.Skip
   ( SkipCounters
   , bump
@@ -42,36 +41,48 @@ data EmitOptions = EmitOptions
   { moduleName :: Text
   -- ^ Fully-qualified Haskell module name (e.g. @DearImGui.Raw.ImGui@).
   , headerInclude :: Text
-  -- ^ The @\#include@ literal placed in every emitted @.hsc@ and used
-  -- as the foreign-import header reference. Default is
-  -- @dcimgui_nodefaultargfunctions.h@; the CLI lets the user override.
+  {- ^ The @\#include@ literal placed in every emitted @.hsc@ and used
+  as the foreign-import header reference. Default is
+  @dcimgui_nodefaultargfunctions.h@; the CLI lets the user override.
+  -}
   , typesModule :: Maybe Text
-  -- ^ Fully-qualified name of the shared types module (e.g.
-  -- @DearImGui.Raw.Types@). Function-only modules import it
-  -- unqualified so type references resolve. 'Nothing' for the types
-  -- module itself.
+  {- ^ Fully-qualified name of the shared types module (e.g.
+  @DearImGui.Raw.Types@). Function-only modules import it
+  unqualified so type references resolve. 'Nothing' for the types
+  module itself.
+  -}
   , opaqueStructs :: Set Text
-  -- ^ Catalog struct names that we'll render as opaque @data X@. Used
-  -- by the function skip rule to detect by-value struct refs in
-  -- signatures (which can't be marshalled across the @capi@ boundary
-  -- when the Haskell side is an opaque @data X@). Whiteboxed structs
-  -- are excluded from this set — they DO marshal by value.
+  {- ^ Catalog struct names that we'll render as opaque @data X@. Used
+  by the function skip rule to detect by-value struct refs in
+  signatures (which can't be marshalled across the @capi@ boundary
+  when the Haskell side is an opaque @data X@). Whiteboxed structs
+  are excluded from this set — they DO marshal by value.
+  -}
   , whiteboxStructs :: Set Text
-  -- ^ Catalog struct names rendered as Haskell records with full
-  -- 'Storable' instances (peek/poke per field). 'renderStruct' uses
-  -- this to branch between record and opaque emission.
-  , externalTypesModule :: Maybe Text
-  -- ^ Set in impl mode: the module from which externally-defined
-  -- types (e.g. @ImDrawData@ supplied by the core package) are
-  -- imported. Function modules emit @import \<this\>@ unqualified
-  -- in addition to any local Types-module import.
+  {- ^ Catalog struct names rendered as Haskell records with full
+  'Storable' instances (peek/poke per field). 'renderStruct' uses
+  this to branch between record and opaque emission.
+  -}
+  , externalTypesModules :: [Text]
+  {- ^ Modules from which externally-defined types are imported. In
+  impl mode this typically includes the core's @Types@ module
+  (e.g. @DearImGui.Raw.Types@) and any third-party-binding
+  modules pulled in by 'typeAliases' (e.g. @Vulkan.Core10@).
+  Function modules emit @import \<m\>@ unqualified for each.
+  Empty for core packages.
+  -}
+  , typeAliases :: TypeAliasMap
+  {- ^ Rename map for TKUser names that resolve via a third-party
+  Haskell binding rather than a local declaration. See 'TypeAliasMap'.
+  -}
   }
   deriving (Eq, Show)
 
--- | Render an 'EmitGroup' as the contents of one @.hsc@ file. Returns
--- the file body, a 'SkipCounters' tally of entities dropped, and the
--- list of 'WrapperDef's the caller must aggregate (one per function
--- whose signature touches a whitebox struct by value).
+{- | Render an 'EmitGroup' as the contents of one @.hsc@ file. Returns
+the file body, a 'SkipCounters' tally of entities dropped, and the
+list of 'WrapperDef's the caller must aggregate (one per function
+whose signature touches a whitebox struct by value).
+-}
 emitGroup :: EmitOptions -> EmitGroup -> (Text, SkipCounters, [WrapperDef])
 emitGroup opts g =
   let
@@ -84,7 +95,7 @@ emitGroup opts g =
     enumNames = [(e :: Enum_).name | e <- g.enums]
     typedefs' = [t | t <- g.typedefs, t.name `notElem` enumNames]
 
-    (typedefBody, sk1) = renderEach renderTypedef skipTypedef typedefs' Skip.empty
+    (typedefBody, sk1) = renderEach (renderTypedef opts) skipTypedef typedefs' Skip.empty
     (structBody, sk2) = renderEach (renderStruct opts) skipStruct g.structs sk1
     (enumBody, sk3) = renderEach renderEnum skipEnum g.enums sk2
     (defineBody, sk4) = renderEach renderDefine skipDefine g.defines sk3
@@ -121,7 +132,7 @@ emitFunctions opts fs sk0 = foldr step ("", sk0, []) fs
       Just reason -> (acc, bump reason sk, ws)
       Nothing
         | needsWrap opts.whiteboxStructs f ->
-            let w = renderWrapper opts.whiteboxStructs f
+            let w = renderWrapper opts.typeAliases opts.whiteboxStructs f
             in (w.haskell <> "\n" <> acc, sk, w : ws)
         | otherwise ->
             (renderFunction opts f <> acc, sk, ws)
@@ -167,7 +178,7 @@ header opts =
     , "import Data.Int (Int8, Int16, Int32, Int64)"
     , "import Data.Word (Word8, Word16, Word32, Word64)"
     ]
-      <> typesImportLine opts.externalTypesModule
+      <> map (\m -> "import " <> m) opts.externalTypesModules
       <> typesImportLine opts.typesModule
       <> [ ""
          , "#include \"" <> opts.headerInclude <> "\""
@@ -179,9 +190,9 @@ header opts =
 -- ---------------------------------------------------------------------------
 -- Per-entity renderers
 
-renderTypedef :: Typedef -> Text
-renderTypedef t =
-  "type " <> t.name <> " = " <> renderHType t.type_.description <> "\n"
+renderTypedef :: EmitOptions -> Typedef -> Text
+renderTypedef opts t =
+  "type " <> t.name <> " = " <> renderHType opts.typeAliases t.type_.description <> "\n"
 
 renderStruct :: EmitOptions -> Struct -> Text
 renderStruct opts s
@@ -214,7 +225,7 @@ record fields (the @HasField@ instance auto-derived under
 is preserved in the @\#{peek}@ / @\#{poke}@ directives so layout
 matches).
 
-A @{-\# CTYPE \"<header>\" \"<C name>\" \#-}@ pragma is attached to
+A @{\-\# CTYPE \"<header>\" \"<C name>\" \#-\}@ pragma is attached to
 the @data@ declaration so @capi@ knows the corresponding C struct
 type. Without this annotation GHC rejects the type as
 \"unmarshallable\" when it appears bare (not under @Ptr@) in a
@@ -267,7 +278,7 @@ renderWhiteboxStruct opts s =
         <> pokeStmts
   where
     renderRecordField f =
-      fieldHaskellName f <> " :: " <> renderHType f.type_.description
+      fieldHaskellName f <> " :: " <> renderHType opts.typeAliases f.type_.description
     peekField f =
       "#{peek " <> s.name <> ", " <> f.name <> "} p"
     pokeField f =
@@ -278,9 +289,10 @@ renderWhiteboxStruct opts s =
         <> "} p v."
         <> fieldHaskellName f
 
--- | Lowercase the first character of a struct-field name so it's a
--- legal Haskell record selector. ImColor's @Value@ becomes @value@;
--- already-lowercase or underscore-prefixed names pass through.
+{- | Lowercase the first character of a struct-field name so it's a
+legal Haskell record selector. ImColor's @Value@ becomes @value@;
+already-lowercase or underscore-prefixed names pass through.
+-}
 fieldHaskellName :: StructField -> Text
 fieldHaskellName f = lowerFirst f.name
 
@@ -296,7 +308,9 @@ kindComment s =
 
 renderEnum :: Enum_ -> Text
 renderEnum e =
-  "type " <> e.name <> " = CInt\n"
+  "type "
+    <> e.name
+    <> " = CInt\n"
     <> Text.concat (map (renderEnumElement e.name) e.elements)
 
 renderEnumElement :: Text -> EnumElement -> Text
@@ -323,8 +337,8 @@ renderDefine d =
 renderFunction :: EmitOptions -> Function -> Text
 renderFunction opts f =
   let
-    argTypes = map renderArgType f.arguments
-    retType = renderReturnType f.returnType
+    argTypes = map (renderArgType opts.typeAliases) f.arguments
+    retType = renderReturnType opts.typeAliases f.returnType
     typeChain'
       | null argTypes = "IO " <> paren retType
       | otherwise =

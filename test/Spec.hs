@@ -1,6 +1,6 @@
 module Main (main) where
 
-import qualified DearBindings.JSONSpec
+import DearBindings.JSONSpec qualified
 import Test.Tasty (defaultMain, testGroup)
 
 main :: IO ()

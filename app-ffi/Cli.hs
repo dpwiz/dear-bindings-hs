@@ -1,7 +1,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 
-{-| optparse-applicative parser for @dear-bindings-ffi@.
--}
+-- | optparse-applicative parser for @dear-bindings-ffi@.
 module Cli
   ( parserInfo
   ) where
@@ -63,20 +62,55 @@ parser = do
             "C header filename to #include in every emitted .hsc and \
             \to use as the foreign-import header reference."
       )
-  externalTypesModule <-
-    optional $
+  externalTypesModules <-
+    many $
       option
         textRead
         ( long "external-types-module"
             <> metavar "MODULE"
             <> help
-              "Switches the generator into impl mode. When set, types \
-              \referenced but not locally defined are imported from \
-              \this module (e.g. DearImGui.Raw.Types from a sibling \
-              \core package), and forward-declared structs are skipped \
-              \rather than redeclared."
+              "Module from which externally-defined types are imported \
+              \unqualified into every generated module. Repeatable. \
+              \Typically: --external-types-module DearImGui.Raw.Types \
+              \(the core's types) plus any third-party Haskell-binding \
+              \modules referenced via --type-aliases-json."
         )
-  pure RunOptions{input, output, moduleRoot, headerInclude, externalTypesModule}
+  externalTypesJson <-
+    many $
+      strOption
+        ( long "external-types-json"
+            <> metavar "PATH"
+            <> help
+              "Path to a dear-bindings JSON whose struct/typedef/enum \
+              \names should be treated as externally provided. \
+              \Repeatable. Forward-declared structs and typedefs whose \
+              \names match are dropped from the impl's local types \
+              \module (the external module supplies them); names not \
+              \found here stay local (impl-owned opaque types or \
+              \impl-only typedefs)."
+        )
+  typeAliasesJson <-
+    optional $
+      strOption
+        ( long "type-aliases-json"
+            <> metavar "PATH"
+            <> help
+              "Path to a JSON map of type renames. Each TKUser name \
+              \matched as a key (e.g. VkDevice) is rewritten to the \
+              \mapped Haskell name (e.g. Device) and the providing \
+              \module is imported. Used to resolve third-party-binding \
+              \types like the Haskell `vulkan` package's exports."
+        )
+  pure
+    RunOptions
+      { input
+      , output
+      , moduleRoot
+      , headerInclude
+      , externalTypesModules
+      , externalTypesJson
+      , typeAliasesJson
+      }
 
 textRead :: ReadM Text
 textRead = Text.pack <$> str

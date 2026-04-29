@@ -1,4 +1,3 @@
-
 {-| Generate by-value-struct shim wrappers.
 
 @capi@ rejects user-defined 'Storable' types as foreign-call argument
@@ -43,47 +42,54 @@ import DearBindings.JSON
   , TypeRef (..)
   )
 import DearBindings.JSON.Types qualified
-import FFI.HType (renderArgType, renderReturnType)
+import FFI.HType (TypeAliasMap, renderArgType, renderReturnType)
 
--- | The header file name we write wrapper declarations into. Both
--- the @.cpp@ side (@\#include\@) and the Haskell @foreign import\@
--- header reference use this string.
+{- | The header file name we write wrapper declarations into. Both
+the @.cpp@ side (@\#include\@) and the Haskell @foreign import\@
+header reference use this string.
+-}
 wrapperHeaderName :: Text
 wrapperHeaderName = "DearImGuiWrappers.h"
 
--- | C symbol suffix appended to the original function name to form
--- the wrapper's symbol.
+{- | C symbol suffix appended to the original function name to form
+the wrapper's symbol.
+-}
 wrapSuffix :: Text
 wrapSuffix = "_wrap"
 
 data WrapperDef = WrapperDef
   { cBody :: Text
-  -- ^ The wrapper's C @extern \"C\"@ definition. Goes into the
-  -- generated @.cpp@.
+  {- ^ The wrapper's C @extern \"C\"@ definition. Goes into the
+  generated @.cpp@.
+  -}
   , cDecl :: Text
-  -- ^ The wrapper's C declaration line. Goes into the generated
-  -- @.h@.
+  {- ^ The wrapper's C declaration line. Goes into the generated
+  @.h@.
+  -}
   , haskell :: Text
-  -- ^ Haskell-side: a raw @foreign import\@ that calls the wrapper
-  -- (using @Ptr T@ for what the wrapper made indirect), plus a
-  -- user-facing function with the original Haskell-natural type
-  -- that does the @with@\/@alloca@ dance.
+  {- ^ Haskell-side: a raw @foreign import\@ that calls the wrapper
+  (using @Ptr T@ for what the wrapper made indirect), plus a
+  user-facing function with the original Haskell-natural type
+  that does the @with@\/@alloca@ dance.
+  -}
   }
   deriving (Eq, Show)
 
--- | True iff the function's signature includes a by-value reference
--- to a whitebox-eligible struct in args or return position. These
--- functions get a generated C shim instead of a direct @foreign
--- import@.
+{- | True iff the function's signature includes a by-value reference
+to a whitebox-eligible struct in args or return position. These
+functions get a generated C shim instead of a direct @foreign
+import@.
+-}
 needsWrap :: Set Text -> Function -> Bool
 needsWrap whitebox f =
   byValRef whitebox f.returnType.description
     || any (argByValRef whitebox) f.arguments
 
--- | Render the full wrapper bundle for one function. Pre-condition:
--- 'needsWrap' is true for the function.
-renderWrapper :: Set Text -> Function -> WrapperDef
-renderWrapper whitebox f =
+{- | Render the full wrapper bundle for one function. Pre-condition:
+'needsWrap' is true for the function.
+-}
+renderWrapper :: TypeAliasMap -> Set Text -> Function -> WrapperDef
+renderWrapper aliases whitebox f =
   let
     wrapName = f.name <> wrapSuffix
     hsRaw = "c_" <> lowerFirst f.name
@@ -118,21 +124,21 @@ renderWrapper whitebox f =
     cDecl' = cRetDecl <> " " <> wrapName <> "(" <> cParamList <> ");"
 
     -- Haskell-side: raw import (Ptr-shaped) and user-facing wrapper
-    hsRawArgTypes = map (hsRawArgType whitebox) f.arguments
+    hsRawArgTypes = map (hsRawArgType aliases whitebox) f.arguments
     hsRawTrail = case retByValName of
       Just t -> ["Ptr " <> t]
       Nothing -> []
     hsRawRet =
       if retIsByVal
         then "IO ()"
-        else "IO " <> paren (renderReturnType f.returnType)
+        else "IO " <> paren (renderReturnType aliases f.returnType)
     hsRawType =
       Text.intercalate
         " -> "
         (map paren (hsRawArgTypes <> hsRawTrail) <> [hsRawRet])
 
-    hsUserArgTypes = map renderArgType f.arguments
-    hsUserRet = "IO " <> paren (renderReturnType f.returnType)
+    hsUserArgTypes = map (renderArgType aliases) f.arguments
+    hsUserRet = "IO " <> paren (renderReturnType aliases f.returnType)
     hsUserType =
       Text.intercalate
         " -> "
@@ -142,6 +148,8 @@ renderWrapper whitebox f =
     -- For each by-value-whitebox arg, we need a `with` binding.
     -- Otherwise the arg passes through unchanged.
     bindings = collectBindings whitebox (zip argNames f.arguments)
+    -- Wrapper rendering doesn't need to look at Wrapper's hsRawArgType
+    -- callsite directly here; that helper now also takes the alias map.
     callArgs =
       [ case lookup an bindings of
           Just pName -> pName
@@ -209,9 +217,10 @@ renderWrapper whitebox f =
     argCName :: Int -> Argument -> Text
     argCName i a = fromMaybe ("arg" <> Text.pack (show i)) a.name
 
--- | Haskell identifier for an argument. Same as the C name unless
--- it collides with a Haskell keyword or shadows a common Prelude
--- binding — in which case we suffix with @_@.
+{- | Haskell identifier for an argument. Same as the C name unless
+it collides with a Haskell keyword or shadows a common Prelude
+binding — in which case we suffix with @_@.
+-}
 hsArgName :: Int -> Argument -> Text
 hsArgName i a =
   let n = fromMaybe ("arg" <> Text.pack (show i)) a.name
@@ -219,9 +228,10 @@ hsArgName i a =
        then n <> "_"
        else n
 
--- | Names that a function-argument identifier can't safely be in
--- Haskell. Includes both reserved keywords (parse errors) and
--- common Prelude bindings whose shadowing GHC warns about.
+{- | Names that a function-argument identifier can't safely be in
+Haskell. Includes both reserved keywords (parse errors) and
+common Prelude bindings whose shadowing GHC warns about.
+-}
 reservedHsNames :: Set Text
 reservedHsNames =
   Set.fromList
@@ -280,18 +290,20 @@ isJust = \case
   Just _ -> True
   Nothing -> False
 
--- | Haskell type for the raw foreign import's argument. By-value
--- whitebox struct args become @Ptr T@; everything else uses the
--- normal 'renderArgType' rendering.
-hsRawArgType :: Set Text -> Argument -> Text
-hsRawArgType whitebox a = case a.type_ of
+{- | Haskell type for the raw foreign import's argument. By-value
+whitebox struct args become @Ptr T@; everything else uses the
+normal 'renderArgType' rendering.
+-}
+hsRawArgType :: TypeAliasMap -> Set Text -> Argument -> Text
+hsRawArgType aliases whitebox a = case a.type_ of
   Just tr -> case userByValName whitebox tr.description of
     Just t -> "Ptr " <> t
-    Nothing -> renderArgType a
-  Nothing -> renderArgType a
+    Nothing -> renderArgType aliases a
+  Nothing -> renderArgType aliases a
 
--- | If the type is a by-value whitebox @TKUser@ reference, return
--- the struct name. Walks through @TKType@ aliases.
+{- | If the type is a by-value whitebox @TKUser@ reference, return
+the struct name. Walks through @TKType@ aliases.
+-}
 userByValName :: Set Text -> TypeKind -> Maybe Text
 userByValName ws = \case
   TKUser n _ | n `Set.member` ws -> Just n
@@ -306,8 +318,9 @@ argByValRef ws a = case a.type_ of
   Just tr -> byValRef ws tr.description
   Nothing -> False
 
--- | For each argument that is a by-value whitebox struct, allocate
--- a fresh local pointer name. Returns @[(argHsName, pName)]@.
+{- | For each argument that is a by-value whitebox struct, allocate
+a fresh local pointer name. Returns @[(argHsName, pName)]@.
+-}
 collectBindings :: Set Text -> [(Text, Argument)] -> [(Text, Text)]
 collectBindings ws pairs =
   [ (an, "_p" <> Text.pack (show i))
@@ -321,8 +334,9 @@ wrapWithBinds [] inner = inner
 wrapWithBinds ((arg, p) : rest) inner =
   "with " <> arg <> " $ \\" <> p <> " -> " <> wrapWithBinds rest inner
 
--- | Lowercase the first character. Mirrors 'FFI.Emit.lowerFirst' so
--- this module stays self-contained.
+{- | Lowercase the first character. Mirrors 'FFI.Emit.lowerFirst' so
+this module stays self-contained.
+-}
 lowerFirst :: Text -> Text
 lowerFirst t = case Text.uncons t of
   Just (c, rest) -> Text.cons (toLowerChar c) rest
@@ -333,11 +347,11 @@ lowerFirst t = case Text.uncons t of
         then toEnum (fromEnum c + 32)
         else c
 
--- | Wrap a rendering in parens unless it's a single token. Used by
--- the Haskell type splicer to avoid producing @Ptr Foo Bar@.
+{- | Wrap a rendering in parens unless it's a single token. Used by
+the Haskell type splicer to avoid producing @Ptr Foo Bar@.
+-}
 paren :: Text -> Text
 paren t
   | Text.any (== ' ') t && not (Text.isPrefixOf "(" t && Text.isSuffixOf ")" t) =
       "(" <> t <> ")"
   | otherwise = t
-

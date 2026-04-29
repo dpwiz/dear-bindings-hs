@@ -38,13 +38,13 @@ module DearBindings.Slice
   , defineInSlice
   ) where
 
-import DearBindings.Catalog (Catalog (..))
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (isJust, mapMaybe)
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
+import DearBindings.Catalog (Catalog (..))
 import DearBindings.JSON
   ( Define (..)
   , Enum_ (..)

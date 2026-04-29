@@ -2,6 +2,7 @@ dear_bindings/
 output/
 dist/
 dist-ffi/
+tmp/
 
 dist-newstyle/
 .stack-work/

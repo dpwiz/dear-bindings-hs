@@ -1,4 +1,3 @@
-
 {-| v0 skip rules. The FFI generator silently drops a handful of entity
 shapes that have no straightforward Haskell FFI representation in v0,
 counting each kind so the run can print a one-shot summary at the
@@ -37,9 +36,10 @@ import DearBindings.JSON
   , Enum_ (..)
   , Function (..)
   , Struct (..)
-  , Typedef (..)
   , TypeKind (..)
+  , Typedef (..)
   )
+import DearBindings.JSON.Conditional qualified
 import DearBindings.JSON.Types qualified
 import FFI.HType (typeKindContainsInlineAggregate)
 
@@ -100,15 +100,17 @@ of those names that appears in by-value position (not behind a
 @TKPointer@) means the function passes a struct by value, which
 @capi@-marshaled opaque @data X@ types can't carry — so we skip.
 
-Note: we do NOT skip on @conditionals@. dear_bindings's @.cpp@
-shim already compiled (and exported) every entity in the JSON, so
-the C symbols exist regardless of the original source-side
-@#ifdef@ guards. Skipping conditional entries here would drop
-typedefs like @ImDrawIdx@ that are guarded by a default-fallback
-pattern in @imgui.h@, breaking downstream type resolution.
+Conditional entries are skipped only when their guards evaluate to
+@false@ under the build's default define set (currently empty). So
+@ifdef __EMSCRIPTEN__@ skips on a Linux build (the C symbol isn't
+emitted by the impl's .cpp), but @ifndef IMGUI_DISABLE_DEBUG_TOOLS@
+keeps (the symbol IS emitted under default flags). This preserves
+typedefs like @ImDrawIdx@ (guarded by a default-fallback pattern)
+without leaving emscripten-only impl functions unresolved at link.
 -}
 skipFunction :: Set Text -> Function -> Maybe SkipReason
 skipFunction structNames f
+  | not (conditionalsActive defaultDefines f.conditionals) = Just ReasonConditional
   | f.isDefaultArgumentHelper = Just ReasonDefaultArgHelper
   | f.isImstrHelper || f.isUnformattedHelper || f.isManualHelper = Just ReasonImstrOrUnformatted
   | any (.isVarargs) f.arguments = Just ReasonVarargs
@@ -195,8 +197,9 @@ skipTypedef t
   | typeKindContainsInlineAggregate t.type_.description = Just ReasonInlineAggregate
   | otherwise = Nothing
 
--- | True iff the entity's @conditionals@ field carries at least one
--- preprocessor guard. v0 drops everything guarded.
+{- | True iff the entity's @conditionals@ field carries at least one
+preprocessor guard. v0 drops everything guarded.
+-}
 entityHasConditionals :: Maybe [Conditional] -> Bool
 entityHasConditionals = hasConditionals
 
@@ -204,6 +207,51 @@ hasConditionals :: Maybe [Conditional] -> Bool
 hasConditionals Nothing = False
 hasConditionals (Just []) = False
 hasConditionals (Just _) = True
+
+{- | The default define set used to evaluate @conditionals@. We don't
+set @IMGUI_DISABLE_DEBUG_TOOLS@, @IMGUI_DISABLE_OBSOLETE_FUNCTIONS@,
+@IMGUI_HAS_IMSTR@, or @__EMSCRIPTEN__@ at compile time, so all of
+those guards resolve under the empty set.
+-}
+defaultDefines :: Set Text
+defaultDefines = Set.empty
+
+{- | True iff every conditional in the list evaluates to true under
+the given define set (i.e. the entity is INSIDE all the @#ifdef@s
+and not gated out). @Nothing@ and @[]@ both mean "no conditionals,
+keep".
+-}
+conditionalsActive :: Set Text -> Maybe [Conditional] -> Bool
+conditionalsActive _ Nothing = True
+conditionalsActive _ (Just []) = True
+conditionalsActive defs (Just cs) = all (evalConditional defs) cs
+
+{- | Evaluate one preprocessor guard. Recognises @ifdef@ / @ifndef@
+exactly, plus @if@ expressions of the form @defined(X)@ /
+@!defined(X)@. Anything else returns 'True' — we'd rather emit a
+binding and let GHC's link step surface the truth than silently
+drop entries with parse-quirks in their guard expressions.
+-}
+evalConditional :: Set Text -> Conditional -> Bool
+evalConditional defs c = case c.condition of
+  "ifdef" -> Set.member (Text.strip c.expression) defs
+  "ifndef" -> Set.notMember (Text.strip c.expression) defs
+  "if" -> evalIfExpr defs (Text.strip c.expression)
+  _ -> True
+
+evalIfExpr :: Set Text -> Text -> Bool
+evalIfExpr defs e
+  | Just sym <- stripDefined e = Set.member sym defs
+  | Just sym <- Text.stripPrefix "!" e
+  , Just sym' <- stripDefined (Text.strip sym) =
+      Set.notMember sym' defs
+  | otherwise = True
+  where
+    stripDefined t = do
+      t1 <- Text.stripPrefix "defined" (Text.strip t)
+      t2 <- Text.stripPrefix "(" (Text.stripStart t1)
+      t3 <- Text.stripSuffix ")" (Text.stripEnd t2)
+      pure (Text.strip t3)
 
 -- ---------------------------------------------------------------------------
 -- Numeric-literal detector for #defines.

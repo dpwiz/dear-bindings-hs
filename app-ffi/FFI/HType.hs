@@ -1,4 +1,3 @@
-
 {-| Render a 'TypeKind' as a Haskell FFI type expression. Output is plain
 'Text' (one line, no embedded newlines) suitable for splicing into a
 generated @foreign import@ signature.
@@ -17,8 +16,14 @@ module FFI.HType
   , renderArgType
   , renderReturnType
   , typeKindContainsInlineAggregate
+  , TypeAliasMap
+  , typeKindUserNames
   ) where
 
+import Data.Map.Strict (Map)
+import Data.Map.Strict qualified as Map
+import Data.Set (Set)
+import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as Text
 import DearBindings.JSON
@@ -28,45 +33,58 @@ import DearBindings.JSON
   )
 import DearBindings.JSON.Types qualified
 
+{- | Map from a C-side TKUser name (e.g. @VkDevice@) to the
+@(module, haskell name)@ pair that resolves it. Pass-through for
+anything not in the map (impl-owned or core-supplied names that
+require no rename).
+-}
+type TypeAliasMap = Map Text (Text, Text)
+
 {- | Render a 'TypeKind' tree as a Haskell type. The result is wrapped
 in parentheses unless it's a single token, so it can always be
 spliced inline (e.g. @\<inner\>@ inside @Ptr (\<inner\>)@).
+
+The 'TypeAliasMap' renames TKUser names that are owned by external
+Haskell packages (e.g. @VkDevice@ → @Device@ from @Vulkan.Core10@).
+Names not in the map pass through verbatim.
 -}
-renderHType :: TypeKind -> Text
+renderHType :: TypeAliasMap -> TypeKind -> Text
 renderHType = render
 
-renderReturnType :: TypeRef -> Text
-renderReturnType tr = renderHType tr.description
+renderReturnType :: TypeAliasMap -> TypeRef -> Text
+renderReturnType aliases tr = renderHType aliases tr.description
 
 {- | Render an 'Argument''s type as a Haskell type. Varargs ('isVarargs'
 true, 'type_' is 'Nothing') don't have a representable Haskell type
 and produce a placeholder; callers should filter them out at a
 higher level.
 -}
-renderArgType :: Argument -> Text
-renderArgType a = case a.type_ of
-  Just tr -> renderHType tr.description
+renderArgType :: TypeAliasMap -> Argument -> Text
+renderArgType aliases a = case a.type_ of
+  Just tr -> renderHType aliases tr.description
   Nothing -> "{- varargs unsupported -}"
 
 -- ---------------------------------------------------------------------------
 -- Internal
 
-render :: TypeKind -> Text
-render = \case
-  TKBuiltin name _scs -> renderBuiltin name
-  TKPointer inner _nullable _ref _scs -> renderPointer inner
-  TKArray inner _bounds ->
-    -- C arrays decay to pointers in function signatures and at struct
-    -- field-by-pointer access; we treat them uniformly as Ptr.
-    "Ptr " <> paren (render inner)
-  TKUser name _scs -> renderUser name
-  TKType _alias inner -> render inner
-  TKFunction ret params -> renderFunPtr ret params
-  TKInlineStruct _ -> "{- inline struct unsupported -}"
-  TKInlineUnion _ -> "{- inline union unsupported -}"
+render :: TypeAliasMap -> TypeKind -> Text
+render aliases = go
+  where
+    go = \case
+      TKBuiltin name _scs -> renderBuiltin name
+      TKPointer inner _nullable _ref _scs -> renderPointer aliases inner
+      TKArray inner _bounds ->
+        -- C arrays decay to pointers in function signatures and at struct
+        -- field-by-pointer access; we treat them uniformly as Ptr.
+        "Ptr " <> paren (go inner)
+      TKUser name _scs -> renderUser aliases name
+      TKType _alias inner -> go inner
+      TKFunction ret params -> renderFunPtr aliases ret params
+      TKInlineStruct _ -> "{- inline struct unsupported -}"
+      TKInlineUnion _ -> "{- inline union unsupported -}"
 
-renderPointer :: TypeKind -> Text
-renderPointer inner = case inner of
+renderPointer :: TypeAliasMap -> TypeKind -> Text
+renderPointer aliases inner = case inner of
   -- void* → Ptr ()
   TKBuiltin "void" _ -> "Ptr ()"
   -- const char* → CString. Plain (mutable) char* stays as Ptr CChar
@@ -78,21 +96,21 @@ renderPointer inner = case inner of
   -- @void (*Foo)(int)@ parses as TKPointer (TKFunction …), but the
   -- Haskell representation already is FunPtr, so we don't wrap it
   -- in another Ptr layer.
-  TKFunction ret params -> renderFunPtr ret params
-  _ -> "Ptr " <> paren (render inner)
+  TKFunction ret params -> renderFunPtr aliases ret params
+  _ -> "Ptr " <> paren (render aliases inner)
 
-renderFunPtr :: TypeKind -> [TypeKind] -> Text
-renderFunPtr ret params =
+renderFunPtr :: TypeAliasMap -> TypeKind -> [TypeKind] -> Text
+renderFunPtr aliases ret params =
   "FunPtr (" <> body <> ")"
   where
     body = case params of
-      [] -> "IO " <> paren (render ret)
-      _ -> arrowChain (map paramType params) <> " -> IO " <> paren (render ret)
+      [] -> "IO " <> paren (render aliases ret)
+      _ -> arrowChain (map paramType params) <> " -> IO " <> paren (render aliases ret)
     -- Function pointer parameters arrive as TKType wrappers; descend
     -- into the inner so we don't print the typedef name as-if-a-type.
     paramType :: TypeKind -> Text
-    paramType (TKType _ inner) = render inner
-    paramType other = render other
+    paramType (TKType _ inner) = render aliases inner
+    paramType other = render aliases other
     arrowChain :: [Text] -> Text
     arrowChain = Text.intercalate " -> " . map paren
 
@@ -104,28 +122,32 @@ Width-suffixed ints come through unchanged; other widths fold into
 comment marker so a downstream type-check failure is easy to grep
 for.
 -}
+
 {- | Some C library types arrive as 'TKUser' (because dear_bindings
 treats them as platform typedefs rather than primitives) but really
 need a 'Foreign.C.Types' counterpart, since the catalog won't carry
-a 'Typedef' for them. Remap a known shortlist; pass everything else
+a 'Typedef' for them. Apply the user-provided alias map first; fall
+back to a built-in shortlist for stdint widths; otherwise pass
 through verbatim.
 -}
-renderUser :: Text -> Text
-renderUser = \case
-  "size_t" -> "CSize"
-  "ssize_t" -> "CSSize"
-  "ptrdiff_t" -> "CPtrdiff"
-  "intptr_t" -> "CIntPtr"
-  "uintptr_t" -> "CUIntPtr"
-  "int8_t" -> "Int8"
-  "int16_t" -> "Int16"
-  "int32_t" -> "Int32"
-  "int64_t" -> "Int64"
-  "uint8_t" -> "Word8"
-  "uint16_t" -> "Word16"
-  "uint32_t" -> "Word32"
-  "uint64_t" -> "Word64"
-  other -> other
+renderUser :: TypeAliasMap -> Text -> Text
+renderUser aliases name = case Map.lookup name aliases of
+  Just (_module, hsName) -> hsName
+  Nothing -> case name of
+    "size_t" -> "CSize"
+    "ssize_t" -> "CSSize"
+    "ptrdiff_t" -> "CPtrdiff"
+    "intptr_t" -> "CIntPtr"
+    "uintptr_t" -> "CUIntPtr"
+    "int8_t" -> "Int8"
+    "int16_t" -> "Int16"
+    "int32_t" -> "Int32"
+    "int64_t" -> "Int64"
+    "uint8_t" -> "Word8"
+    "uint16_t" -> "Word16"
+    "uint32_t" -> "Word32"
+    "uint64_t" -> "Word64"
+    other -> other
 
 {- | Map a dear-bindings @builtin_type@ name to its Haskell counterpart.
 The JSON uses underscores rather than spaces to keep the names
@@ -177,9 +199,10 @@ paren t
       Text.any (== ' ') s
         && not (Text.isPrefixOf "(" s && Text.isSuffixOf ")" s)
 
--- | True iff the tree contains an inline struct or union somewhere.
--- Used by 'FFI.Skip' to drop functions whose signatures embed
--- anonymous aggregates that v0 has no way to surface.
+{- | True iff the tree contains an inline struct or union somewhere.
+Used by 'FFI.Skip' to drop functions whose signatures embed
+anonymous aggregates that v0 has no way to surface.
+-}
 typeKindContainsInlineAggregate :: TypeKind -> Bool
 typeKindContainsInlineAggregate = \case
   TKInlineStruct _ -> True
@@ -192,3 +215,19 @@ typeKindContainsInlineAggregate = \case
   TKFunction ret params ->
     typeKindContainsInlineAggregate ret
       || any typeKindContainsInlineAggregate params
+
+{- | Collect every TKUser name reachable from a 'TypeKind' tree. Used
+by the runner to decide which alias-map modules a generated module
+needs to import.
+-}
+typeKindUserNames :: TypeKind -> Set Text
+typeKindUserNames = \case
+  TKBuiltin _ _ -> Set.empty
+  TKUser n _ -> Set.singleton n
+  TKPointer inner _ _ _ -> typeKindUserNames inner
+  TKArray inner _ -> typeKindUserNames inner
+  TKType _ inner -> typeKindUserNames inner
+  TKFunction ret params ->
+    Set.union (typeKindUserNames ret) (Set.unions (map typeKindUserNames params))
+  TKInlineStruct _ -> Set.empty
+  TKInlineUnion _ -> Set.empty
