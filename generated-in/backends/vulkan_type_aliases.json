@@ -1,0 +1,36 @@
+{
+  "PFN_vkVoidFunction":             { "module": "Vulkan.Core10",         "name": "PFN_vkVoidFunction" },
+  "VkDeviceSize":                   { "module": "Vulkan.Core10",         "name": "DeviceSize" },
+
+  "VkCommandBuffer":                { "module": "Vulkan.Core10.Handles", "name": "Ptr CommandBuffer_T" },
+  "VkDevice":                       { "module": "Vulkan.Core10.Handles", "name": "Ptr Device_T" },
+  "VkInstance":                     { "module": "Vulkan.Core10.Handles", "name": "Ptr Instance_T" },
+  "VkPhysicalDevice":               { "module": "Vulkan.Core10.Handles", "name": "Ptr PhysicalDevice_T" },
+  "VkQueue":                        { "module": "Vulkan.Core10.Handles", "name": "Ptr Queue_T" },
+
+  "VkCommandPool":                  { "module": "Vulkan.Core10",         "name": "CommandPool" },
+  "VkDescriptorPool":               { "module": "Vulkan.Core10",         "name": "DescriptorPool" },
+  "VkDescriptorSet":                { "module": "Vulkan.Core10",         "name": "DescriptorSet" },
+  "VkFence":                        { "module": "Vulkan.Core10",         "name": "Fence" },
+  "VkFramebuffer":                  { "module": "Vulkan.Core10",         "name": "Framebuffer" },
+  "VkImage":                        { "module": "Vulkan.Core10",         "name": "Image" },
+  "VkImageView":                    { "module": "Vulkan.Core10",         "name": "ImageView" },
+  "VkPipeline":                     { "module": "Vulkan.Core10",         "name": "Pipeline" },
+  "VkPipelineCache":                { "module": "Vulkan.Core10",         "name": "PipelineCache" },
+  "VkPipelineLayout":               { "module": "Vulkan.Core10",         "name": "PipelineLayout" },
+  "VkRenderPass":                   { "module": "Vulkan.Core10",         "name": "RenderPass" },
+  "VkSampler":                      { "module": "Vulkan.Core10",         "name": "Sampler" },
+  "VkSemaphore":                    { "module": "Vulkan.Core10",         "name": "Semaphore" },
+
+  "VkSurfaceKHR":                   { "module": "Vulkan.Extensions",     "name": "SurfaceKHR" },
+  "VkSwapchainKHR":                 { "module": "Vulkan.Extensions",     "name": "SwapchainKHR" },
+
+  "VkResult":                       { "module": "Vulkan.Core10",         "name": "Result" },
+  "VkFormat":                       { "module": "Vulkan.Core10",         "name": "Format" },
+  "VkImageLayout":                  { "module": "Vulkan.Core10",         "name": "ImageLayout" },
+  "VkSampleCountFlagBits":          { "module": "Vulkan.Core10",         "name": "SampleCountFlagBits" },
+  "VkImageUsageFlags":              { "module": "Vulkan.Core10",         "name": "ImageUsageFlags" },
+  "VkDynamicState":                 { "module": "Vulkan.Core10",         "name": "DynamicState" },
+  "VkColorSpaceKHR":                { "module": "Vulkan.Extensions",     "name": "ColorSpaceKHR" },
+  "VkPresentModeKHR":               { "module": "Vulkan.Extensions",     "name": "PresentModeKHR" }
+}

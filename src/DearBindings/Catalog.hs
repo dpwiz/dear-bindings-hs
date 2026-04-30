@@ -33,7 +33,10 @@ import DearBindings.JSON
   , Enum_ (..)
   , Function (..)
   , Header (..)
+  , SourceLocation (..)
   , Struct (..)
+  , TypeKind (..)
+  , TypeRef (..)
   , Typedef (..)
   )
 import DearBindings.Qualifier (Category (..))
@@ -52,15 +55,67 @@ empty = Catalog Map.empty Map.empty Map.empty Map.empty Map.empty
 
 fromHeader :: Header -> Catalog
 fromHeader h =
-  Catalog
-    { defines = byName (.name) h.defines
-    , enums = byName (.name) h.enums
-    , typedefs = byName (.name) h.typedefs
-    , structs = byName (.name) h.structs
-    , functions = byName (.name) h.functions
-    }
+  let
+    (selfRefs, regularTypedefs) = partitionSelfRef h.typedefs
+    syntheticStructs = map selfRefToStruct selfRefs
+  in
+    Catalog
+      { defines = byName (.name) h.defines
+      , enums = byName (.name) h.enums
+      , typedefs = byName (.name) regularTypedefs
+      , -- syntheticStructs first so a real struct with the same
+        -- name (last-wins in Map.fromList) takes precedence; the
+        -- synthetic only surfaces when no real decl exists.
+        structs = byName (.name) (syntheticStructs <> h.structs)
+      , functions = byName (.name) h.functions
+      }
   where
     byName key = Map.fromList . map (\x -> (key x, x))
+
+{- | Split typedefs into (self-referential, rest).
+
+dear_bindings emits a self-referential typedef — one whose RHS is a
+@TKUser@ pointing back at the LHS — to acknowledge that an external
+type exists by name without describing its layout. This is the
+union-shaped analogue of a @struct Foo;@ forward declaration; the C
+type ('SDL_Event' is a union from @<SDL2/SDL_events.h>@) can't be
+forward-declared as a struct, so dear_bindings uses the typedef
+trick instead.
+
+Without this rewrite the FFI generator would emit
+@type SDL_Event = SDL_Event@ which GHC rejects as a synonym cycle.
+-}
+partitionSelfRef :: [Typedef] -> ([Typedef], [Typedef])
+partitionSelfRef = foldr step ([], [])
+  where
+    step t (selfs, rest)
+      | isSelfRef t = (t : selfs, rest)
+      | otherwise = (selfs, t : rest)
+
+    isSelfRef t = case t.type_.description of
+      TKUser n _ -> n == t.name
+      _ -> False
+
+{- | Convert a self-referential typedef into a synthetic forward-declared
+'Struct'. The emit pipeline already handles forward-declared structs
+as opaque @data X@, which is exactly what we want for an external
+type referenced only through pointers.
+-}
+selfRefToStruct :: Typedef -> Struct
+selfRefToStruct t =
+  Struct
+    { name = t.name
+    , originalFullyQualifiedName = t.name
+    , kind = "struct"
+    , byValue = False
+    , forwardDeclaration = True
+    , isAnonymous = False
+    , isInternal = t.isInternal
+    , fields = []
+    , comments = t.comments
+    , conditionals = t.conditionals
+    , sourceLocation = t.sourceLocation
+    }
 
 fromHeaders :: [Header] -> Catalog
 fromHeaders = foldr (\h acc -> merge (fromHeader h) acc) empty

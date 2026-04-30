@@ -1,0 +1,71 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.39.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           dear-imgui-raw-impl-vulkan
+version:        0.0.0
+synopsis:       Vulkan backend bindings for dear-imgui-raw-{vanilla,docking}.
+license:        BSD-3-Clause
+build-type:     Simple
+
+flag docking
+  description: Build against dear-imgui-raw-docking.
+  manual: True
+  default: False
+
+flag vanilla
+  description: Build against dear-imgui-raw-vanilla.
+  manual: True
+  default: False
+
+library
+  exposed-modules:
+      DearImGui.Raw.Impl.Vulkan
+      DearImGui.Raw.Impl.Vulkan.Types
+  other-modules:
+      Paths_dear_imgui_raw_impl_vulkan
+  autogen-modules:
+      Paths_dear_imgui_raw_impl_vulkan
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
+  ghc-options: -Wall -optc-Wno-discarded-qualifiers -optc-Wno-incompatible-pointer-types -optc-Wno-int-conversion
+  cxx-options: -std=c++11 -fpermissive
+  build-tool-depends:
+      hsc2hs:hsc2hs
+  build-depends:
+      base >=4.7 && <5
+    , vulkan
+  default-language: GHC2021
+  if flag(vanilla) && flag(docking)
+    buildable: False
+  if !flag(vanilla) && !flag(docking)
+    buildable: False
+  if flag(vanilla)
+    hs-source-dirs:
+        flavor-vanilla/src
+    include-dirs:
+        flavor-vanilla/cbits
+    cxx-sources:
+        flavor-vanilla/cbits/dcimgui_impl_vulkan.cpp
+        flavor-vanilla/cbits/DearImGuiWrappers.cpp
+        imgui-impl/imgui_impl_vulkan_vanilla.cpp
+    build-depends:
+        dear-imgui-raw-vanilla
+  if flag(docking)
+    hs-source-dirs:
+        flavor-docking/src
+    include-dirs:
+        flavor-docking/cbits
+    cxx-sources:
+        flavor-docking/cbits/dcimgui_impl_vulkan.cpp
+        flavor-docking/cbits/DearImGuiWrappers.cpp
+        imgui-impl/imgui_impl_vulkan_docking.cpp
+    build-depends:
+        dear-imgui-raw-docking

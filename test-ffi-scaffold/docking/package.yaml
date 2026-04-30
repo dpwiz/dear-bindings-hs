@@ -1,0 +1,36 @@
+name: test-ffi-scaffold-docking
+version: 0.0.0
+synopsis: Cross-package type-unification check (docking flavor).
+
+# Hand-rolled consumer that proves the same `Ptr ImDrawData` flows
+# across the core and every impl backend under the docking cabal
+# flag. Type-checks => architecture is sound.
+#
+# Backends enrolled here all build end-to-end. The remaining
+# Linux-buildable templates (sdl-renderer*, sdlgpu3, opengl2,
+# allegro5) scaffold and generate but fail to link against the
+# vendored v1.92.7 imgui core — see the Backend coverage table in
+# the top-level README.
+
+language: GHC2021
+
+default-extensions:
+  - BlockArguments
+  - DuplicateRecordFields
+  - LambdaCase
+  - NoFieldSelectors
+  - OverloadedRecordDot
+  - OverloadedStrings
+
+dependencies:
+  - base
+  - dear-imgui-raw-docking
+  - dear-imgui-raw-impl-opengl3
+  - dear-imgui-raw-impl-glfw
+  - dear-imgui-raw-impl-vulkan
+  - dear-imgui-raw-impl-sdl2
+  - dear-imgui-raw-impl-sdl3
+  - vulkan
+
+library:
+  source-dirs: src

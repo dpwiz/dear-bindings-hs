@@ -18,6 +18,7 @@ module FFI.HType
   , typeKindContainsInlineAggregate
   , TypeAliasMap
   , typeKindUserNames
+  , toHsTypeName
   ) where
 
 import Data.Map.Strict (Map)
@@ -147,7 +148,7 @@ renderUser aliases name = case Map.lookup name aliases of
     "uint16_t" -> "Word16"
     "uint32_t" -> "Word32"
     "uint64_t" -> "Word64"
-    other -> other
+    other -> toHsTypeName other
 
 {- | Map a dear-bindings @builtin_type@ name to its Haskell counterpart.
 The JSON uses underscores rather than spaces to keep the names
@@ -185,6 +186,18 @@ renderBuiltin t = case Text.replace " " "_" t of
   "intptr_t" -> "CIntPtr"
   "uintptr_t" -> "CUIntPtr"
   _ -> t <> "{-?-}"
+
+{- | Convert a C type tag to a Haskell type-constructor name.
+
+Strips leading underscores so SDL-style opaque tags like
+@struct _SDL_GameController@ round-trip into a valid Haskell @data@
+declaration. The C-side spelling (used by hsc2hs @\#{size}@ /
+@\#{peek}@ directives and by @{\-\# CTYPE \#-\}@ pragmas) must keep
+the original underscores — call sites apply this helper only where
+the result is a Haskell identifier. Idempotent.
+-}
+toHsTypeName :: Text -> Text
+toHsTypeName = Text.dropWhile (== '_')
 
 {- | Wrap a rendering in parens unless it's already a single token.
 Used by callers that splice the result into a larger type (Ptr,

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Pull the latest dear_bindings JSON for both variants and render the
-# whole catalog into ./output/{vanilla,docking}/. Intended to run on CI.
+# Render the dear_bindings JSON catalog (committed under generated-in/)
+# into ./output/{vanilla,docking}/ as browsable HTML. Intended to run on CI.
 #
 # Re-running with no upstream changes is cheap: each variant directory
 # carries a `.fingerprint` sentinel summarising the inputs + flags it was
@@ -14,17 +14,6 @@
 #                            e.g. /dear-bindings-aeson/  → vanilla URLs become
 #                            /dear-bindings-aeson/vanilla/..., docking likewise.
 #   FORMAT                 pandoc writer name    (default: html5)
-#   WITH_DEFAULT_HELPERS   1 → use dcimgui.json (with C++-default-argument
-#                            helper functions like ImDrawList_AddCircle and
-#                            ImDrawList_AddCircleEx side-by-side).
-#                          0 → use dcimgui_nodefaultargfunctions.json (one
-#                            function per C++ entry point; let the host
-#                            language express defaults itself).
-#                          (default: 0 — appropriate for languages with
-#                            optional/keyword arguments, e.g. Haskell.)
-#   SKIP_PULL              1 → don't run pull_dear_bindings.py.
-#                          Useful for fast local iteration once you have
-#                          the JSON downloaded.   (default: 0)
 #   FORCE                  1 → ignore cache, regenerate every variant.
 #                                                (default: 0)
 
@@ -33,18 +22,9 @@ set -euo pipefail
 OUTPUT_DIR="${OUTPUT_DIR:-./output}"
 BASE_PATH="${BASE_PATH:-}"
 FORMAT="${FORMAT:-html5}"
-WITH_DEFAULT_HELPERS="${WITH_DEFAULT_HELPERS:-0}"
-SKIP_PULL="${SKIP_PULL:-0}"
 FORCE="${FORCE:-0}"
 
 cd "$(dirname "$0")/.."
-
-if [ "$SKIP_PULL" = "1" ]; then
-  echo "==> Skipping pull (SKIP_PULL=1)"
-else
-  echo "==> Pulling dear_bindings releases"
-  python3 scripts/pull_dear_bindings.py
-fi
 
 echo "==> Building dear-bindings-doc"
 stack build dear-bindings-aeson:exe:dear-bindings-doc
@@ -58,14 +38,10 @@ exe_hash="$(sha256sum "$exe_path" | cut -d' ' -f1)"
 
 mkdir -p "$OUTPUT_DIR"
 
-if [ "$WITH_DEFAULT_HELPERS" = "1" ]; then
-  core_glob='dcimgui.json dcimgui_internal.json'
-else
-  core_glob='dcimgui_nodefaultargfunctions.json dcimgui_nodefaultargfunctions_internal.json'
-fi
+core_glob='dcimgui_nodefaultargfunctions.json dcimgui_nodefaultargfunctions_internal.json'
 
 for variant in vanilla docking; do
-  src_dir="dear_bindings/$variant"
+  src_dir="generated-in/$variant"
   dst_dir="$OUTPUT_DIR/$variant"
 
   if ! compgen -G "$src_dir/*.json" > /dev/null; then
@@ -74,15 +50,20 @@ for variant in vanilla docking; do
   fi
 
   # Pick exactly one of the two flavours of the core API, plus every
-  # backend file (dcimgui_impl_*.json) — those are unaffected by the
-  # default-argument-helper distinction.
+  # backend file (dcimgui_impl_*.json). Non-vulkan backend JSONs are
+  # flavor-neutral and live under generated-in/backends/; vulkan is
+  # flavor-specific and lives under $src_dir.
   inputs=()
   for f in $core_glob; do
     [ -f "$src_dir/$f" ] && inputs+=("$src_dir/$f")
   done
-  for f in "$src_dir"/dcimgui_impl_*.json; do
+  for f in generated-in/backends/dcimgui_impl_*.json; do
+    case "$f" in
+      *_imconfig.json|*_imgui.json) continue ;;
+    esac
     [ -f "$f" ] && inputs+=("$f")
   done
+  [ -f "$src_dir/dcimgui_impl_vulkan.json" ] && inputs+=("$src_dir/dcimgui_impl_vulkan.json")
 
   if [ ${#inputs[@]} -eq 0 ]; then
     echo "!!  $src_dir matched no expected JSON files; skipping"
@@ -104,7 +85,6 @@ for variant in vanilla docking; do
   fingerprint=$(printf '%s\n' \
     "format=$FORMAT" \
     "base=$BASE_PATH" \
-    "helpers=$WITH_DEFAULT_HELPERS" \
     "exe=$exe_hash" \
     "inputs=$(printf '%s\n' "${inputs[@]}" | sort)")
 

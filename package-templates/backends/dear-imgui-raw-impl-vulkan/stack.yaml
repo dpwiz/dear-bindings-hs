@@ -1,0 +1,12 @@
+snapshot:
+  url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/24/38.yaml
+
+extra-deps:
+- vulkan-3.26.6
+
+# Backend has flavor-specific source trees — building it standalone
+# won't work (no flavor selected). Verification runs through the
+# consumer projects under dist-ffi/test-{vanilla,docking}/, which set
+# the right flag and pull in the matching core.
+packages:
+- .

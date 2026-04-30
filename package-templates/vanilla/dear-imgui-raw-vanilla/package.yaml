@@ -1,0 +1,66 @@
+name:                dear-imgui-raw-vanilla
+version:             0.0.0
+synopsis:            Raw FFI bindings to dear_bindings (vanilla flavour).
+license:             BSD-3-Clause
+
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DuplicateRecordFields
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
+- OverloadedStrings
+
+dependencies:
+- base >= 4.7 && < 5
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  # capi-generated C wrappers cast away const for `const char*`
+  # returns going to Haskell's `CString` (= `Ptr CChar`). gcc warns
+  # on the discarded qualifier, and GHC turns the warning into a
+  # compile failure. Pass through cc-disabling flags.
+  - -optc-Wno-discarded-qualifiers
+  - -optc-Wno-incompatible-pointer-types
+  cxx-sources:
+  - cbits/dcimgui_nodefaultargfunctions.cpp
+  - cbits/imgui/imgui.cpp
+  - cbits/imgui/imgui_draw.cpp
+  - cbits/imgui/imgui_widgets.cpp
+  - cbits/imgui/imgui_tables.cpp
+  - cbits/imgui/imgui_demo.cpp
+  - cbits/DearImGuiWrappers.cpp
+  include-dirs:
+  - cbits
+  - cbits/imgui
+  install-includes:
+  # Backend impl headers (e.g. dcimgui_impl_opengl3.h) #include
+  # "dcimgui.h" hardcoded by dear_bindings; we satisfy that include
+  # by populating cbits/dcimgui.h with a copy of the no-default-args
+  # header (identical type definitions, only function-list differs).
+  # Both names are exposed so downstream sees what the impl headers
+  # ask for.
+  #
+  # Names are listed without the imgui/ prefix because dcimgui.h
+  # does @#include "imconfig.h"@ unqualified; Cabal resolves the
+  # path via include-dirs and exposes the header at the install
+  # root.
+  - dcimgui_nodefaultargfunctions.h
+  - dcimgui.h
+  - imgui.h
+  - imconfig.h
+  - imstb_textedit.h
+  - imstb_truetype.h
+  - imstb_rectpack.h
+  - DearImGuiWrappers.h
+  extra-libraries:
+  - stdc++
+  cxx-options:
+  - -std=c++11
+  - -fpermissive
+  build-tools:
+  - hsc2hs

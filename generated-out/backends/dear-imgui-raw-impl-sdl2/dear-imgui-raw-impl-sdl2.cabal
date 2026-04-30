@@ -1,0 +1,64 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.39.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           dear-imgui-raw-impl-sdl2
+version:        0.0.0
+synopsis:       SDL2 platform backend bindings for dear-imgui-raw-{vanilla,docking}.
+license:        BSD-3-Clause
+build-type:     Simple
+
+flag docking
+  description: Build against dear-imgui-raw-docking.
+  manual: True
+  default: False
+
+flag vanilla
+  description: Build against dear-imgui-raw-vanilla.
+  manual: True
+  default: False
+
+library
+  exposed-modules:
+      DearImGui.Raw.Impl.SDL2
+      DearImGui.Raw.Impl.SDL2.Types
+  other-modules:
+      Paths_dear_imgui_raw_impl_sdl2
+  autogen-modules:
+      Paths_dear_imgui_raw_impl_sdl2
+  hs-source-dirs:
+      src
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
+  ghc-options: -Wall -optc-Wno-discarded-qualifiers -optc-Wno-incompatible-pointer-types
+  cxx-options: -std=c++11 -fpermissive
+  include-dirs:
+      cbits
+  cxx-sources:
+      cbits/dcimgui_impl_sdl2.cpp
+      cbits/DearImGuiWrappers.cpp
+      cbits/imgui_impl_sdl2.cpp
+  pkgconfig-depends:
+      sdl2
+  build-tool-depends:
+      hsc2hs:hsc2hs
+  build-depends:
+      base >=4.7 && <5
+  default-language: GHC2021
+  if flag(vanilla) && flag(docking)
+    buildable: False
+  if !flag(vanilla) && !flag(docking)
+    buildable: False
+  if flag(vanilla)
+    build-depends:
+        dear-imgui-raw-vanilla
+  if flag(docking)
+    build-depends:
+        dear-imgui-raw-docking

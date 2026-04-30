@@ -1,0 +1,26 @@
+snapshot:
+  url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/24/38.yaml
+
+packages:
+  - .
+  - ../../generated-out/vanilla/dear-imgui-raw-vanilla
+  - ../../generated-out/backends/dear-imgui-raw-impl-opengl3
+  - ../../generated-out/backends/dear-imgui-raw-impl-glfw
+  - ../../generated-out/backends/dear-imgui-raw-impl-vulkan
+  - ../../generated-out/backends/dear-imgui-raw-impl-sdl2
+  - ../../generated-out/backends/dear-imgui-raw-impl-sdl3
+
+extra-deps:
+  - vulkan-3.26.6
+
+flags:
+  dear-imgui-raw-impl-opengl3:
+    vanilla: true
+  dear-imgui-raw-impl-glfw:
+    vanilla: true
+  dear-imgui-raw-impl-vulkan:
+    vanilla: true
+  dear-imgui-raw-impl-sdl2:
+    vanilla: true
+  dear-imgui-raw-impl-sdl3:
+    vanilla: true

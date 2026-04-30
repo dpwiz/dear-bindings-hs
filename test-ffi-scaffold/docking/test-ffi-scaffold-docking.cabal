@@ -1,0 +1,35 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.39.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           test-ffi-scaffold-docking
+version:        0.0.0
+synopsis:       Cross-package type-unification check (docking flavor).
+build-type:     Simple
+
+library
+  exposed-modules:
+      Test
+  other-modules:
+      Paths_test_ffi_scaffold_docking
+  hs-source-dirs:
+      src
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
+  build-depends:
+      base
+    , dear-imgui-raw-docking
+    , dear-imgui-raw-impl-glfw
+    , dear-imgui-raw-impl-opengl3
+    , dear-imgui-raw-impl-sdl2
+    , dear-imgui-raw-impl-sdl3
+    , dear-imgui-raw-impl-vulkan
+    , vulkan
+  default-language: GHC2021

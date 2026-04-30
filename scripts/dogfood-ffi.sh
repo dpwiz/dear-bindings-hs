@@ -15,12 +15,12 @@
 #   3. stack-build the core package (standalone)
 #   4. regenerate the (single, shared) backend package once
 #   5. for each chosen flavor: stack-build the consumer test project
-#      under dist-ffi/test-<flavor>/, which transitively exercises the
-#      backend package against the matching core via cabal flags
+#      under test-ffi-scaffold/<flavor>/, which transitively exercises
+#      the backend package against the matching core via cabal flags
 #
-# Prerequisite (one-off): imgui sources vendored into each core's
-# cbits/imgui/, plus imgui_impl_*.cpp variants vendored into the
-# backend's cbits/. If any are missing the script tells you and stops.
+# Prerequisite: generated-out/ already populated with package skeletons
+# (package.yaml + vendored cbits). If anything is missing this script
+# delegates to scripts/generate-all-ffi.sh to materialize the tree first.
 
 set -euo pipefail
 
@@ -41,28 +41,36 @@ case "${1:-}" in
     ;;
 esac
 
-opengl3_dir="generated/backends/dear-imgui-raw-impl-opengl3"
-opengl3_json="generated/backends/dcimgui_impl_opengl3.json"
+# If generated-out/ has been wiped (or never built), let
+# generate-all-ffi.sh recreate the full tree before we start iterating.
+if [ ! -f "generated-out/vanilla/dear-imgui-raw-vanilla/package.yaml" ] \
+   || [ ! -f "generated-out/backends/dear-imgui-raw-impl-glfw/package.yaml" ]; then
+  echo "==> generated-out/ not populated; delegating to scripts/generate-all-ffi.sh"
+  scripts/generate-all-ffi.sh
+fi
 
-glfw_dir="generated/backends/dear-imgui-raw-impl-glfw"
-glfw_json="generated/backends/dcimgui_impl_glfw.json"
+opengl3_dir="generated-out/backends/dear-imgui-raw-impl-opengl3"
+opengl3_json="generated-in/backends/dcimgui_impl_opengl3.json"
 
-vulkan_dir="generated/backends/dear-imgui-raw-impl-vulkan"
-vulkan_aliases="generated/backends/vulkan_type_aliases.json"
+glfw_dir="generated-out/backends/dear-imgui-raw-impl-glfw"
+glfw_json="generated-in/backends/dcimgui_impl_glfw.json"
+
+vulkan_dir="generated-out/backends/dear-imgui-raw-impl-vulkan"
+vulkan_aliases="generated-in/backends/vulkan_type_aliases.json"
 
 # Common --external-types-json source for all impl regens. Vanilla
 # and docking core JSONs declare the same set of struct/typedef/enum
 # names (only the function lists and field counts differ), so either
 # works as the "external names" reference for impl-mode drops.
-external_core_json="dear_bindings/vanilla/dcimgui_nodefaultargfunctions.json"
+external_core_json="generated-in/vanilla/dcimgui_nodefaultargfunctions.json"
 
 echo "==> Building dear-bindings-ffi"
 stack build --flag dear-bindings-aeson:executables >/dev/null
 
 # Regenerate every requested core, build it standalone.
 for flavor in "${flavors[@]}"; do
-  core_dir="generated/${flavor}/dear-imgui-raw-${flavor}"
-  core_json="dear_bindings/${flavor}/dcimgui_nodefaultargfunctions.json"
+  core_dir="generated-out/${flavor}/dear-imgui-raw-${flavor}"
+  core_json="generated-in/${flavor}/dcimgui_nodefaultargfunctions.json"
 
   if [ ! -f "${core_dir}/package.yaml" ]; then
     echo "==> ${flavor}: ${core_dir}/package.yaml missing — set up the package first" >&2
@@ -166,8 +174,8 @@ fi
 
 for vfl in vanilla docking; do
   v_subdir="${vulkan_dir}/flavor-${vfl}"
-  v_json="dear_bindings/${vfl}/dcimgui_impl_vulkan.json"
-  v_external="dear_bindings/${vfl}/dcimgui_nodefaultargfunctions.json"
+  v_json="generated-in/${vfl}/dcimgui_impl_vulkan.json"
+  v_external="generated-in/${vfl}/dcimgui_nodefaultargfunctions.json"
 
   if [ ! -f "$v_json" ]; then
     echo "==> vulkan: ${vfl} input JSON missing at $v_json" >&2
@@ -196,7 +204,7 @@ done
 # proves cross-package type identity holds — Test.hs assigns
 # core.ImDrawData to the impl's foreign-import expectation.
 for flavor in "${flavors[@]}"; do
-  test_dir="dist-ffi/test-${flavor}"
+  test_dir="test-ffi-scaffold/${flavor}"
 
   if [ ! -f "${test_dir}/package.yaml" ]; then
     echo "==> ${flavor}: ${test_dir}/package.yaml missing — scaffold the consumer first" >&2

@@ -1,0 +1,62 @@
+name:                dear-imgui-raw-impl-allegro5
+version:             0.0.0
+synopsis:            Allegro 5 platform + renderer backend bindings for dear-imgui-raw-{vanilla,docking}.
+license:             BSD-3-Clause
+
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DuplicateRecordFields
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
+- OverloadedStrings
+
+dependencies:
+- base >= 4.7 && < 5
+
+flags:
+  vanilla:
+    description: Build against dear-imgui-raw-vanilla.
+    manual: true
+    default: false
+  docking:
+    description: Build against dear-imgui-raw-docking.
+    manual: true
+    default: false
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  - -optc-Wno-discarded-qualifiers
+  - -optc-Wno-incompatible-pointer-types
+  cxx-sources:
+  - cbits/dcimgui_impl_allegro5.cpp
+  - cbits/DearImGuiWrappers.cpp
+  # imgui-side backend is identical across vanilla/docking branches
+  # for allegro5 (no multi-viewport-only divergence), so a single cpp
+  # serves both flavors.
+  - cbits/imgui_impl_allegro5.cpp
+  include-dirs:
+  - cbits
+  cxx-options:
+  - -std=c++11
+  - -fpermissive
+  build-tools:
+  - hsc2hs
+  pkg-config-dependencies:
+  - allegro-5
+  - allegro_main-5
+  when:
+  - condition: flag(vanilla) && flag(docking)
+    buildable: false
+  - condition: "!flag(vanilla) && !flag(docking)"
+    buildable: false
+  - condition: flag(vanilla)
+    dependencies:
+    - dear-imgui-raw-vanilla
+  - condition: flag(docking)
+    dependencies:
+    - dear-imgui-raw-docking

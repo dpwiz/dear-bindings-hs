@@ -23,7 +23,7 @@ import DearBindings.JSON
   , Typedef (..)
   )
 import DearBindings.JSON.Types qualified
-import FFI.HType (TypeAliasMap, renderArgType, renderHType, renderReturnType)
+import FFI.HType (TypeAliasMap, renderArgType, renderHType, renderReturnType, toHsTypeName)
 import FFI.Skip
   ( SkipCounters
   , bump
@@ -197,22 +197,27 @@ renderTypedef opts t =
 renderStruct :: EmitOptions -> Struct -> Text
 renderStruct opts s
   | s.forwardDeclaration =
-      kindComment s <> "data " <> s.name <> "\n"
+      kindComment s <> "data " <> n <> "\n"
   | s.name `Set.member` opts.whiteboxStructs =
       renderWhiteboxStruct opts s
   | otherwise =
       -- #{size} / #{alignment} need the flat C identifier
       -- (Struct.name) rather than the C++ qualified form
       -- (originalFullyQualifiedName) — the latter contains @::@ and
-      -- @<>@ for templated types, which hsc2hs would reject.
+      -- @<>@ for templated types, which hsc2hs would reject. The
+      -- Haskell-side name @n@ is the C tag with any leading
+      -- underscores stripped (e.g. SDL2 @_SDL_GameController@ →
+      -- @SDL_GameController@); the hsc2hs splices keep @s.name@.
       Text.unlines
-        [ kindComment s <> "data " <> s.name
-        , "instance Storable " <> s.name <> " where"
+        [ kindComment s <> "data " <> n
+        , "instance Storable " <> n <> " where"
         , "  sizeOf _    = #{size " <> s.name <> "}"
         , "  alignment _ = #{alignment " <> s.name <> "}"
-        , "  peek _ = error \"" <> s.name <> ": opaque struct, peek not supported in v0\""
-        , "  poke _ _ = error \"" <> s.name <> ": opaque struct, poke not supported in v0\""
+        , "  peek _ = error \"" <> n <> ": opaque struct, peek not supported in v0\""
+        , "  poke _ _ = error \"" <> n <> ": opaque struct, poke not supported in v0\""
         ]
+  where
+    n = toHsTypeName s.name
 
 {- | Whitebox emission: a Haskell record + a fully-implemented
 'Storable' instance using hsc2hs @\#{peek}@ / @\#{poke}@ directives
@@ -239,7 +244,12 @@ typeclass.
 renderWhiteboxStruct :: EmitOptions -> Struct -> Text
 renderWhiteboxStruct opts s =
   let
-    n = s.name
+    -- @cN@ is the C-side tag (kept verbatim for the CTYPE pragma and
+    -- hsc2hs splices); @n@ is the Haskell-side type/constructor name
+    -- (leading underscores stripped). They diverge for SDL-style
+    -- @_Foo@ tags; otherwise they're identical.
+    cN = s.name
+    n = toHsTypeName s.name
     fields = s.fields
     recordLines = case fields of
       [] -> []
@@ -261,7 +271,7 @@ renderWhiteboxStruct opts s =
       "{-# CTYPE \""
         <> opts.headerInclude
         <> "\" \""
-        <> n
+        <> cN
         <> "\" #-}"
   in
     Text.unlines $
@@ -270,8 +280,8 @@ renderWhiteboxStruct opts s =
         <> [ "  deriving (Eq, Show)"
            , ""
            , "instance Storable " <> n <> " where"
-           , "  sizeOf _    = #{size " <> n <> "}"
-           , "  alignment _ = #{alignment " <> n <> "}"
+           , "  sizeOf _    = #{size " <> cN <> "}"
+           , "  alignment _ = #{alignment " <> cN <> "}"
            , "  peek p = " <> peekExpr
            , "  poke p v = do"
            ]

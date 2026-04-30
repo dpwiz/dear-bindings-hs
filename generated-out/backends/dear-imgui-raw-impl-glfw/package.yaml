@@ -1,0 +1,65 @@
+name:                dear-imgui-raw-impl-glfw
+version:             0.0.0
+synopsis:            GLFW backend bindings for dear-imgui-raw-{vanilla,docking}.
+license:             BSD-3-Clause
+
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DuplicateRecordFields
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
+- OverloadedStrings
+
+dependencies:
+- base >= 4.7 && < 5
+
+flags:
+  vanilla:
+    description: Build against dear-imgui-raw-vanilla.
+    manual: true
+    default: false
+  docking:
+    description: Build against dear-imgui-raw-docking.
+    manual: true
+    default: false
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  - -optc-Wno-discarded-qualifiers
+  - -optc-Wno-incompatible-pointer-types
+  # The dear_bindings shim is byte-identical between flavours, so
+  # this stanza always includes it. The imgui-side backend
+  # (imgui_impl_glfw.cpp) does differ between flavours; conditional
+  # cxx-sources below picks the right .cpp.
+  cxx-sources:
+  - cbits/dcimgui_impl_glfw.cpp
+  - cbits/DearImGuiWrappers.cpp
+  include-dirs:
+  - cbits
+  cxx-options:
+  - -std=c++11
+  - -fpermissive
+  build-tools:
+  - hsc2hs
+  pkg-config-dependencies:
+  - glfw3
+  when:
+  - condition: flag(vanilla) && flag(docking)
+    buildable: false
+  - condition: "!flag(vanilla) && !flag(docking)"
+    buildable: false
+  - condition: flag(vanilla)
+    dependencies:
+    - dear-imgui-raw-vanilla
+    cxx-sources:
+    - cbits/imgui_impl_glfw_vanilla.cpp
+  - condition: flag(docking)
+    dependencies:
+    - dear-imgui-raw-docking
+    cxx-sources:
+    - cbits/imgui_impl_glfw_docking.cpp

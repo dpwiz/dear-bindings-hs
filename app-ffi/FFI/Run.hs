@@ -32,7 +32,7 @@ import DearBindings.JSON
 import DearBindings.JSON.IO qualified as JSON
 import DearBindings.JSON.Types qualified
 import FFI.Emit (EmitOptions (..), emitGroup)
-import FFI.HType (TypeAliasMap, typeKindUserNames)
+import FFI.HType (TypeAliasMap, toHsTypeName, typeKindUserNames)
 import FFI.Module (qualifierToModule, qualifierToPath)
 import FFI.Skip (SkipCounters)
 import FFI.Skip qualified as Skip
@@ -155,6 +155,12 @@ run opts = do
         <> " entities but routing placed "
         <> show routedTotal
         <> ". This is a bug in FFI.Slicing.routeEverything."
+
+  -- Two catalog structs whose names sanitize to the same Haskell ctor
+  -- (e.g. @_Foo@ and @Foo@) would emit two conflicting @data Foo@
+  -- declarations. SDL2 doesn't trigger this; the check is a guardrail
+  -- for future inputs.
+  checkHsNameCollisions catalog.structs
 
   createDirectoryIfMissing True opts.output
 
@@ -368,6 +374,33 @@ builtinUserNames =
     , "uint32_t"
     , "uint64_t"
     ]
+
+{- | Fail loudly if two distinct catalog struct C-tags collapse to the
+same Haskell type-constructor name once 'toHsTypeName' strips their
+leading underscores. e.g. having both @_Foo@ and @Foo@ in the same
+catalog would emit two @data Foo@ decls. The current SDL2 catalog
+doesn't trigger this; the check is a guardrail for future inputs.
+-}
+checkHsNameCollisions :: Map Text a -> IO ()
+checkHsNameCollisions structs =
+  let
+    grouped =
+      Map.fromListWith (<>) [(toHsTypeName n, [n]) | n <- Map.keys structs]
+    clashes =
+      [(hs, cs) | (hs, cs) <- Map.toList grouped, length cs > 1]
+  in
+    unless (null clashes) $
+      error $
+        "FFI.Run: Haskell-name collision after leading-underscore "
+          <> "sanitization. These C tags share a Haskell type ctor:\n"
+          <> concat
+            [ "  "
+                <> Text.unpack hs
+                <> " <- "
+                <> show cs
+                <> "\n"
+            | (hs, cs) <- clashes
+            ]
 
 {- | True iff the name can be the head of a Haskell @data@ declaration:
 starts uppercase and has no spaces or punctuation other than @_@.

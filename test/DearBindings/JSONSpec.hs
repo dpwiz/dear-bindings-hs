@@ -4,6 +4,7 @@ module DearBindings.JSONSpec (tests) where
 
 import Data.Aeson qualified as Aeson
 import Data.ByteString.Lazy qualified as LBS
+import Data.List (isPrefixOf)
 import DearBindings.JSON.IO qualified as JSON
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath (takeExtension, (</>))
@@ -12,8 +13,9 @@ import Test.Tasty.HUnit (assertFailure, testCase, (@?=))
 
 variants :: [(String, FilePath)]
 variants =
-  [ ("vanilla", "dear_bindings/vanilla")
-  , ("docking", "dear_bindings/docking")
+  [ ("vanilla", "generated-in/vanilla")
+  , ("docking", "generated-in/docking")
+  , ("backends", "generated-in/backends")
   ]
 
 tests :: IO TestTree
@@ -33,10 +35,12 @@ variantGroup (label, dir) = do
               assertFailure $
                 "directory missing: "
                   <> dir
-                  <> " (run scripts/pull_dear_bindings.py to populate)"
+                  <> " (populate from upstream dear_bindings releases)"
           ]
     else do
-      files <- filter ((== ".json") . takeExtension) <$> listDirectory dir
+      let isDearBindingsJSON n =
+            "dcimgui" `isPrefixOf` n && takeExtension n == ".json"
+      files <- filter isDearBindingsJSON <$> listDirectory dir
       pure $ testGroup label (map (fileGroup dir) files)
 
 fileGroup :: FilePath -> FilePath -> TestTree

@@ -1,0 +1,81 @@
+name:                dear-imgui-raw-impl-vulkan
+version:             0.0.0
+synopsis:            Vulkan backend bindings for dear-imgui-raw-{vanilla,docking}.
+license:             BSD-3-Clause
+
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DuplicateRecordFields
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
+- OverloadedStrings
+
+dependencies:
+- base >= 4.7 && < 5
+- vulkan
+
+flags:
+  vanilla:
+    description: Build against dear-imgui-raw-vanilla.
+    manual: true
+    default: false
+  docking:
+    description: Build against dear-imgui-raw-docking.
+    manual: true
+    default: false
+
+library:
+  # hpack can't auto-discover exposed modules under conditional
+  # source-dirs, so list them here. The same modules exist under each
+  # flavor's src/ tree; the cabal flag picks one path at build time.
+  exposed-modules:
+  - DearImGui.Raw.Impl.Vulkan
+  - DearImGui.Raw.Impl.Vulkan.Types
+  ghc-options:
+  - -Wall
+  - -optc-Wno-discarded-qualifiers
+  - -optc-Wno-incompatible-pointer-types
+  # The vulkan Haskell package models non-dispatchable handles
+  # (Sampler, ImageView, …) as @newtype X = X Word64@. On x86_64,
+  # the C side defines them as pointer-typedefs (@struct VkX_T*@).
+  # The bit-pattern matches but GCC needs permission for the
+  # int↔pointer cast in capi-generated wrappers.
+  - -optc-Wno-int-conversion
+  cxx-options:
+  - -std=c++11
+  - -fpermissive
+  build-tools:
+  - hsc2hs
+  when:
+  # Mutually-exclusive flavour flags. Without exactly one set, the
+  # package is unbuildable — Haskell modules and the dcimgui/imgui-side
+  # .cpp differ between flavours (docking has multi-viewport extras).
+  - condition: flag(vanilla) && flag(docking)
+    buildable: false
+  - condition: "!flag(vanilla) && !flag(docking)"
+    buildable: false
+  - condition: flag(vanilla)
+    source-dirs:
+    - flavor-vanilla/src
+    cxx-sources:
+    - flavor-vanilla/cbits/dcimgui_impl_vulkan.cpp
+    - flavor-vanilla/cbits/DearImGuiWrappers.cpp
+    - imgui-impl/imgui_impl_vulkan_vanilla.cpp
+    include-dirs:
+    - flavor-vanilla/cbits
+    dependencies:
+    - dear-imgui-raw-vanilla
+  - condition: flag(docking)
+    source-dirs:
+    - flavor-docking/src
+    cxx-sources:
+    - flavor-docking/cbits/dcimgui_impl_vulkan.cpp
+    - flavor-docking/cbits/DearImGuiWrappers.cpp
+    - imgui-impl/imgui_impl_vulkan_docking.cpp
+    include-dirs:
+    - flavor-docking/cbits
+    dependencies:
+    - dear-imgui-raw-docking

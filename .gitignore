@@ -1,4 +1,3 @@
-dear_bindings/
 output/
 dist/
 dist-ffi/
@@ -7,3 +6,11 @@ tmp/
 dist-newstyle/
 .stack-work/
 *~
+
+# dear_bindings byproducts — inventories of imconfig/imgui-side names
+# the wrapper depends on. Not consumed by the toolchain.
+*_imconfig.json
+*_imgui.json
+
+# stack.yaml.lock pins are per-consumer; let downstream regenerate.
+stack.yaml.lock

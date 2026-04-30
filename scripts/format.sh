@@ -1,1 +1,1 @@
-fourmolu -i {app,src,test}/**/*.hs
+fourmolu -i {app*,src,test}/**/*.hs

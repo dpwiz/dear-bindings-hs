@@ -1,0 +1,61 @@
+name:                dear-imgui-raw-impl-sdl2
+version:             0.0.0
+synopsis:            SDL2 platform backend bindings for dear-imgui-raw-{vanilla,docking}.
+license:             BSD-3-Clause
+
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DuplicateRecordFields
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
+- OverloadedStrings
+
+dependencies:
+- base >= 4.7 && < 5
+
+flags:
+  vanilla:
+    description: Build against dear-imgui-raw-vanilla.
+    manual: true
+    default: false
+  docking:
+    description: Build against dear-imgui-raw-docking.
+    manual: true
+    default: false
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  - -optc-Wno-discarded-qualifiers
+  - -optc-Wno-incompatible-pointer-types
+  cxx-sources:
+  - cbits/dcimgui_impl_sdl2.cpp
+  - cbits/DearImGuiWrappers.cpp
+  # imgui-side backend is identical across vanilla/docking branches
+  # for SDL2 (no multi-viewport-only divergence), so a single cpp
+  # serves both flavors.
+  - cbits/imgui_impl_sdl2.cpp
+  include-dirs:
+  - cbits
+  cxx-options:
+  - -std=c++11
+  - -fpermissive
+  build-tools:
+  - hsc2hs
+  pkg-config-dependencies:
+  - sdl2
+  when:
+  - condition: flag(vanilla) && flag(docking)
+    buildable: false
+  - condition: "!flag(vanilla) && !flag(docking)"
+    buildable: false
+  - condition: flag(vanilla)
+    dependencies:
+    - dear-imgui-raw-vanilla
+  - condition: flag(docking)
+    dependencies:
+    - dear-imgui-raw-docking

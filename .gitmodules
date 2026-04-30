@@ -1,0 +1,12 @@
+[submodule "upstream/imgui-vanilla"]
+	path = upstream/imgui-vanilla
+	url = https://github.com/ocornut/imgui
+	branch = v1.92.7
+[submodule "upstream/imgui-docking"]
+	path = upstream/imgui-docking
+	url = https://github.com/ocornut/imgui
+	branch = v1.92.7-docking
+[submodule "upstream/dear_bindings"]
+	path = upstream/dear_bindings
+	url = https://github.com/dearimgui/dear_bindings
+	branch = main

@@ -1,0 +1,84 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.39.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           dear-imgui-raw-docking
+version:        0.0.0
+synopsis:       Raw FFI bindings to dear_bindings (docking flavour).
+license:        BSD-3-Clause
+build-type:     Simple
+
+library
+  exposed-modules:
+      DearImGui.Raw
+      DearImGui.Raw.ImColor
+      DearImGui.Raw.ImDrawCmd
+      DearImGui.Raw.ImDrawData
+      DearImGui.Raw.ImDrawList
+      DearImGui.Raw.ImDrawListSplitter
+      DearImGui.Raw.ImFont
+      DearImGui.Raw.ImFontAtlas
+      DearImGui.Raw.ImFontBaked
+      DearImGui.Raw.ImFontGlyphRangesBuilder
+      DearImGui.Raw.ImGui
+      DearImGui.Raw.ImGuiInputTextCallbackData
+      DearImGui.Raw.ImGuiIO
+      DearImGui.Raw.ImGuiListClipper
+      DearImGui.Raw.ImGuiPayload
+      DearImGui.Raw.ImGuiPlatformIO
+      DearImGui.Raw.ImGuiSelectionBasicStorage
+      DearImGui.Raw.ImGuiSelectionExternalStorage
+      DearImGui.Raw.ImGuiStorage
+      DearImGui.Raw.ImGuiStyle
+      DearImGui.Raw.ImGuiTextBuffer
+      DearImGui.Raw.ImGuiTextFilter
+      DearImGui.Raw.ImGuiViewport
+      DearImGui.Raw.ImStr
+      DearImGui.Raw.ImTextureData
+      DearImGui.Raw.ImTextureRef
+      DearImGui.Raw.ImVector
+      DearImGui.Raw.Types
+  other-modules:
+      Paths_dear_imgui_raw_docking
+  autogen-modules:
+      Paths_dear_imgui_raw_docking
+  hs-source-dirs:
+      src
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
+  ghc-options: -Wall -optc-Wno-discarded-qualifiers -optc-Wno-incompatible-pointer-types
+  cxx-options: -std=c++11 -fpermissive
+  include-dirs:
+      cbits
+      cbits/imgui
+  install-includes:
+      dcimgui_nodefaultargfunctions.h
+      dcimgui.h
+      imgui.h
+      imconfig.h
+      imstb_textedit.h
+      imstb_truetype.h
+      imstb_rectpack.h
+      DearImGuiWrappers.h
+  cxx-sources:
+      cbits/dcimgui_nodefaultargfunctions.cpp
+      cbits/imgui/imgui.cpp
+      cbits/imgui/imgui_draw.cpp
+      cbits/imgui/imgui_widgets.cpp
+      cbits/imgui/imgui_tables.cpp
+      cbits/imgui/imgui_demo.cpp
+      cbits/DearImGuiWrappers.cpp
+  extra-libraries:
+      stdc++
+  build-tool-depends:
+      hsc2hs:hsc2hs
+  build-depends:
+      base >=4.7 && <5
+  default-language: GHC2021
