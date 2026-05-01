@@ -4,6 +4,7 @@ snapshot:
 packages:
   - .
   - ../../generated-out/vanilla/dear-imgui-raw-vanilla
+  - ../../generated-out/vanilla/dear-imgui-raw-vanilla-internal
   - ../../generated-out/backends/dear-imgui-raw-impl-opengl3
   - ../../generated-out/backends/dear-imgui-raw-impl-glfw
   - ../../generated-out/backends/dear-imgui-raw-impl-vulkan

@@ -23,6 +23,7 @@ import DearBindings.Catalog (Catalog (..))
 import DearBindings.Catalog qualified as Catalog
 import DearBindings.JSON
   ( Argument (..)
+  , Enum_ (..)
   , Function (..)
   , Struct (..)
   , StructField (..)
@@ -82,7 +83,7 @@ data RunOptions = RunOptions
 run :: RunOptions -> IO ()
 run opts = do
   hdr <- JSON.decodeFile opts.input
-  externalNames <- loadExternalNames opts.externalTypesJson
+  (externalNames, externalByValueNames) <- loadExternalNames opts.externalTypesJson
   typeAliases <- loadTypeAliases opts.typeAliasesJson
   let
     catalog = Catalog.fromHeader hdr
@@ -111,7 +112,13 @@ run opts = do
             , builtinUserNames
             ]
     allStructs = Set.fromList (Map.keys catalog.structs)
-    whiteboxed = whiteboxSet catalog
+    -- Whitebox set merges the local catalog's by-value structs with
+    -- by-value structs from any --external-types-json catalog. The
+    -- latter aren't redeclared locally (their decls live in the
+    -- external module), but functions in this catalog that touch
+    -- them by value still need wrapper shims since @capi@ can't
+    -- marshal user-defined types by value across the FFI.
+    whiteboxed = whiteboxSet catalog `Set.union` externalByValueNames
     -- Skip rule's by-value-blocked set is the catalog structs we
     -- haven't whiteboxed plus any unmapped externals: each emits as
     -- an opaque @data X@, which @capi@ can't marshal by value. Names
@@ -165,10 +172,37 @@ run opts = do
   createDirectoryIfMissing True opts.output
 
   let hasLocalTypes = any (\g -> g.qualifier == typesQualifier) groups
+      -- Names emitted in the local Types module that ALSO appear in
+      -- @externalNames@ (i.e. are also exported by an
+      -- @--external-types-module@). Each such name is a redeclaration
+      -- that would clash on import — typically a forward decl in the
+      -- core upgraded to a full struct in the @-internal@ package.
+      -- We render every external-Types import with @hiding (n1, …)@
+      -- so the local definition shadows the external one.
+      localTypesNames :: Set Text
+      localTypesNames =
+        Set.unions
+          [ Set.unions
+              [ Set.fromList [s.name | s <- g.structs, not s.forwardDeclaration]
+              , Set.fromList [t.name | t <- g.typedefs]
+              , Set.fromList [(e :: Enum_).name | e <- g.enums]
+              ]
+          | g <- groups
+          , g.qualifier == typesQualifier
+          ]
+      -- Names redeclared by the local Types module that are ALSO
+      -- exported from an --external-types-module. Each becomes a
+      -- @hiding@ entry on every external Types import so the local
+      -- declaration shadows the external one (typically a forward
+      -- decl in the core upgraded to a full struct in @-internal@).
+      externalShadows :: [Text]
+      externalShadows =
+        map toHsTypeName $
+          Set.toAscList (Set.intersection localTypesNames externalNames)
 
   (finalCounters, allWrappers) <-
     foldl'
-      (step opaqueStructs whiteboxed hasLocalTypes typeAliases aliasModules)
+      (step opaqueStructs whiteboxed hasLocalTypes typeAliases aliasModules externalShadows)
       (pure (Skip.empty, []))
       groups
 
@@ -184,9 +218,9 @@ run opts = do
       <> "."
   TextIO.hPutStrLn stderr (Skip.renderReport finalCounters)
   where
-    step opaque whitebox hasLocalTypes aliases aliasMods acc g = do
+    step opaque whitebox hasLocalTypes aliases aliasMods extShadows acc g = do
       (sk, ws) <- acc
-      (sk', ws') <- writeOne opts opaque whitebox hasLocalTypes aliases aliasMods g sk
+      (sk', ws') <- writeOne opts opaque whitebox hasLocalTypes aliases aliasMods extShadows g sk
       pure (sk', ws <> ws')
 
 writeOne
@@ -196,10 +230,11 @@ writeOne
   -> Bool
   -> TypeAliasMap
   -> [Text]
+  -> [Text]
   -> EmitGroup
   -> SkipCounters
   -> IO (SkipCounters, [WrapperDef])
-writeOne opts opaque whitebox hasLocalTypes aliases aliasMods g priorSk = do
+writeOne opts opaque whitebox hasLocalTypes aliases aliasMods extShadows g priorSk = do
   let
     moduleName = qualifierToModule opts.moduleRoot g.qualifier
     typesModuleName = qualifierToModule opts.moduleRoot typesQualifier
@@ -210,21 +245,21 @@ writeOne opts opaque whitebox hasLocalTypes aliases aliasMods g priorSk = do
       | g.qualifier == typesQualifier = Nothing
       | hasLocalTypes = Just typesModuleName
       | otherwise = Nothing
-    -- Function modules import the external Types modules (e.g. core's
-    -- Types and any third-party binding modules from typeAliases);
-    -- the Types group imports only the third-party modules, since
-    -- its own structs may reference aliased SDK types but the core
-    -- Types module is its own peer. -Wno-unused-imports keeps the
-    -- noise down when no aliases are actually used.
-    externalImports
-      | g.qualifier == typesQualifier = aliasMods
-      | otherwise = opts.externalTypesModules <> aliasMods
+    -- Every emitted module imports the external Types modules (e.g.
+    -- the core's Types module + any third-party binding modules from
+    -- typeAliases). For derivative packages like @-internal@, the
+    -- LOCAL Types module also references the core's types
+    -- (e.g. @ImRect { min :: ImVec2 }@), so it needs the same
+    -- imports. -Wno-unused-imports keeps the noise down when nothing
+    -- in a particular module actually references an external name.
+    externalImports = opts.externalTypesModules <> aliasMods
     eopts =
       EmitOptions
         { moduleName = moduleName
         , headerInclude = opts.headerInclude
         , typesModule = localTypesImport
         , externalTypesModules = externalImports
+        , externalTypesHidings = extShadows
         , opaqueStructs = opaque
         , whiteboxStructs = whitebox
         , typeAliases = aliases
@@ -288,20 +323,29 @@ writeWrapperFiles opts ws = do
 {- | Load the union of struct/typedef/enum names defined in each
 reference catalog. These are the names the impl can rely on the
 external module to provide — the router drops matching forward
-decls and typedefs from the impl's local types group.
+decls and typedefs from the impl's local types group. Also returns
+the subset of external structs that are by-value-whitebox eligible
+(byValue=True); these need to be threaded into 'whiteboxStructs' so
+the wrapper machinery generates by-pointer shims for impl functions
+that take/return them by value.
 -}
-loadExternalNames :: [FilePath] -> IO (Set Text)
+loadExternalNames :: [FilePath] -> IO (Set Text, Set Text)
 loadExternalNames paths = do
   cats <- traverse (fmap Catalog.fromHeader . JSON.decodeFile) paths
-  pure $
-    Set.unions
-      [ Set.unions
-          [ Set.fromList (Map.keys c.structs)
-          , Set.fromList (Map.keys c.typedefs)
-          , Set.fromList (Map.keys c.enums)
-          ]
-      | c <- cats
-      ]
+  pure
+    ( Set.unions
+        [ Set.unions
+            [ Set.fromList (Map.keys c.structs)
+            , Set.fromList (Map.keys c.typedefs)
+            , Set.fromList (Map.keys c.enums)
+            ]
+        | c <- cats
+        ]
+    , Set.unions
+        [ Set.fromList [s.name | s <- Map.elems c.structs, s.byValue]
+        | c <- cats
+        ]
+    )
 
 {- | Decode a type-aliases JSON of the form
 

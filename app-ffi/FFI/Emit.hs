@@ -27,6 +27,7 @@ import FFI.HType (TypeAliasMap, renderArgType, renderHType, renderReturnType, to
 import FFI.Skip
   ( SkipCounters
   , bump
+  , conditionalsActiveDefault
   , skipDefine
   , skipEnum
   , skipFunction
@@ -70,6 +71,13 @@ data EmitOptions = EmitOptions
   modules pulled in by 'typeAliases' (e.g. @Vulkan.Core10@).
   Function modules emit @import \<m\>@ unqualified for each.
   Empty for core packages.
+  -}
+  , externalTypesHidings :: [Text]
+  {- ^ Haskell names that the local package re-declares (typically
+  full struct definitions for entities the core forward-declared).
+  Each external Types import is rendered with a @hiding (n1, n2, …)@
+  clause naming these so the local declaration shadows the
+  external one. Empty list = plain @import \<m\>@.
   -}
   , typeAliases :: TypeAliasMap
   {- ^ Rename map for TKUser names that resolve via a third-party
@@ -178,7 +186,7 @@ header opts =
     , "import Data.Int (Int8, Int16, Int32, Int64)"
     , "import Data.Word (Word8, Word16, Word32, Word64)"
     ]
-      <> map (\m -> "import " <> m) opts.externalTypesModules
+      <> map renderExternalImport opts.externalTypesModules
       <> typesImportLine opts.typesModule
       <> [ ""
          , "#include \"" <> opts.headerInclude <> "\""
@@ -186,13 +194,19 @@ header opts =
   where
     typesImportLine Nothing = []
     typesImportLine (Just m) = ["import " <> m]
+    renderExternalImport m = case opts.externalTypesHidings of
+      [] -> "import " <> m
+      hs -> "import " <> m <> " hiding (" <> Text.intercalate ", " hs <> ")"
 
 -- ---------------------------------------------------------------------------
 -- Per-entity renderers
 
 renderTypedef :: EmitOptions -> Typedef -> Text
 renderTypedef opts t =
-  "type " <> t.name <> " = " <> renderHType opts.typeAliases t.type_.description <> "\n"
+  -- Apply toHsTypeName to the typedef's own name too — typedefs from
+  -- C may start lowercase (e.g. @stbrp_node_im@), which Haskell rejects
+  -- as a type-constructor head.
+  "type " <> toHsTypeName t.name <> " = " <> renderHType opts.typeAliases t.type_.description <> "\n"
 
 renderStruct :: EmitOptions -> Struct -> Text
 renderStruct opts s
@@ -321,7 +335,14 @@ renderEnum e =
   "type "
     <> e.name
     <> " = CInt\n"
-    <> Text.concat (map (renderEnumElement e.name) e.elements)
+    <> Text.concat (map (renderEnumElement e.name) (filter active e.elements))
+  where
+    -- Drop elements gated by inactive #ifdefs (e.g.
+    -- IMGUI_ENABLE_TEST_ENGINE-only flag values). hsc2hs's #const
+    -- lookup would otherwise fail to find the C identifier at
+    -- preprocessor time. Skip-counter bookkeeping happens at the
+    -- enum level, not per-element, so this is a silent filter.
+    active el = conditionalsActiveDefault el.conditionals
 
 renderEnumElement :: Text -> EnumElement -> Text
 renderEnumElement enumName el

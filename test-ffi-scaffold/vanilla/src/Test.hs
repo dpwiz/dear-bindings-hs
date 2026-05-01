@@ -5,7 +5,8 @@ import DearImGui.Raw.Impl.OpenGL3 (cImGui_ImplOpenGL3_RenderDrawData)
 import DearImGui.Raw.Impl.SDL2 (cImGui_ImplSDL2_NewFrame)
 import DearImGui.Raw.Impl.SDL3 (cImGui_ImplSDL3_NewFrame)
 import DearImGui.Raw.Impl.Vulkan (cImGui_ImplVulkan_RenderDrawDataEx)
-import DearImGui.Raw.Types (ImDrawData)
+import DearImGui.Raw.Internal.ImGui (imGui_ActivateItemByID)
+import DearImGui.Raw.Types (ImDrawData, ImGuiID)
 import Foreign.Ptr (Ptr)
 import Vulkan.Core10 (Pipeline)
 import Vulkan.Core10.Handles (CommandBuffer_T)
@@ -13,10 +14,13 @@ import Vulkan.Core10.Handles (CommandBuffer_T)
 -- Compiles iff the same Ptr ImDrawData unifies across opengl3 and
 -- vulkan impls and the chosen core. The glfw and sdl2 calls also
 -- link-test those backends even though they don't share types here.
-checkUnification :: Ptr ImDrawData -> Ptr CommandBuffer_T -> Pipeline -> IO ()
-checkUnification p cb pl = do
+-- The internal-API import additionally proves the vanilla-internal
+-- package's bindings link against the same core.
+checkUnification :: Ptr ImDrawData -> Ptr CommandBuffer_T -> Pipeline -> ImGuiID -> IO ()
+checkUnification p cb pl k = do
   cImGui_ImplOpenGL3_RenderDrawData p
   cImGui_ImplVulkan_RenderDrawDataEx p cb pl
   cImGui_ImplGlfw_NewFrame
   cImGui_ImplSDL2_NewFrame
   cImGui_ImplSDL3_NewFrame
+  imGui_ActivateItemByID k

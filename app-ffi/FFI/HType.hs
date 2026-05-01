@@ -21,6 +21,7 @@ module FFI.HType
   , toHsTypeName
   ) where
 
+import Data.Char qualified as Char
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Set (Set)
@@ -191,13 +192,21 @@ renderBuiltin t = case Text.replace " " "_" t of
 
 Strips leading underscores so SDL-style opaque tags like
 @struct _SDL_GameController@ round-trip into a valid Haskell @data@
-declaration. The C-side spelling (used by hsc2hs @\#{size}@ /
-@\#{peek}@ directives and by @{\-\# CTYPE \#-\}@ pragmas) must keep
-the original underscores — call sites apply this helper only where
-the result is a Haskell identifier. Idempotent.
+declaration. Also uppercases the first character if it starts
+lowercase (e.g. @stbrp_node@ → @Stbrp_node@) since Haskell type
+constructors must begin uppercase. The C-side spelling (used by
+hsc2hs @\#{size}@ / @\#{peek}@ directives and by @{\-\# CTYPE \#-\}@
+pragmas) must keep the original spelling — call sites apply this
+helper only where the result is a Haskell identifier. Idempotent.
 -}
 toHsTypeName :: Text -> Text
-toHsTypeName = Text.dropWhile (== '_')
+toHsTypeName n =
+  let stripped = Text.dropWhile (== '_') n
+  in case Text.uncons stripped of
+       Just (c, rest)
+         | c >= 'a' && c <= 'z' ->
+             Text.singleton (Char.toUpper c) <> rest
+       _ -> stripped
 
 {- | Wrap a rendering in parens unless it's already a single token.
 Used by callers that splice the result into a larger type (Ptr,

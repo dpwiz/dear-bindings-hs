@@ -25,6 +25,7 @@ default-extensions:
 dependencies:
   - base
   - dear-imgui-raw-vanilla
+  - dear-imgui-raw-vanilla-internal
   - dear-imgui-raw-impl-opengl3
   - dear-imgui-raw-impl-glfw
   - dear-imgui-raw-impl-vulkan

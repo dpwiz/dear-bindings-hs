@@ -1,0 +1,51 @@
+name: file-viewer
+version: 0.0.0
+synopsis: Minimal docking + GLFW + OpenGL3 demo (file browser).
+
+# A small dogfood consumer that exercises the docking-flavor FFI
+# end-to-end: opens a GLFW window, drives ImGui through the OpenGL3
+# backend, and shows two dockable panes (file list / preview).
+
+language: GHC2021
+
+default-extensions:
+  - BlockArguments
+  - DuplicateRecordFields
+  - LambdaCase
+  - NamedFieldPuns
+  - NoFieldSelectors
+  - OverloadedRecordDot
+  - OverloadedStrings
+  - PatternSynonyms
+
+dependencies:
+  - base
+
+executables:
+  file-viewer:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -Wall
+    dependencies:
+      - bytestring
+      - directory
+      - filepath
+      - text
+      - GLFW-b
+      - bindings-GLFW
+      - dear-imgui-raw-docking
+      - dear-imgui-raw-docking-internal
+      - dear-imgui-raw-impl-glfw
+      - dear-imgui-raw-impl-opengl3
+    build-tools:
+      - hsc2hs
+    # The OpenGL3 backend uses imgl3w to dlopen its own symbols at
+    # runtime, so it doesn't pull libGL through the linker. We hit
+    # libGL directly for glViewport/glClear, so we have to link it
+    # ourselves.
+    extra-libraries:
+      - GL

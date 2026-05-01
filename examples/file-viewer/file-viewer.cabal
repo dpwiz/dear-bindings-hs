@@ -1,0 +1,46 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.39.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           file-viewer
+version:        0.0.0
+synopsis:       Minimal docking + GLFW + OpenGL3 demo (file browser).
+build-type:     Simple
+
+executable file-viewer
+  main-is: Main.hs
+  other-modules:
+      App.FileBrowser
+      App.Helpers
+      Paths_file_viewer
+  hs-source-dirs:
+      app
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NamedFieldPuns
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
+      PatternSynonyms
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  extra-libraries:
+      GL
+  build-tools:
+      hsc2hs
+  build-depends:
+      GLFW-b
+    , base
+    , bindings-GLFW
+    , bytestring
+    , dear-imgui-raw-docking
+    , dear-imgui-raw-docking-internal
+    , dear-imgui-raw-impl-glfw
+    , dear-imgui-raw-impl-opengl3
+    , directory
+    , filepath
+    , text
+  default-language: GHC2021

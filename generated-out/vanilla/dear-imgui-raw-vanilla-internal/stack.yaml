@@ -1,0 +1,6 @@
+snapshot:
+  url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/24/38.yaml
+
+packages:
+- .
+- ../dear-imgui-raw-vanilla

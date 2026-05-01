@@ -81,6 +81,50 @@ for flavor in "${flavors[@]}"; do
     -o "${core_dir}"
 done
 
+# ----- per-flavor internal API (DockBuilder etc.) -----
+#
+# Sibling package per flavor that depends on the core and re-exports the
+# internal/unstable surface from imgui_internal.h. The .cpp links into
+# the core's already-built ImGui implementation, so no imgui*.cpp is
+# duplicated here. Public types live in DearImGui.Raw.Types (core); only
+# new types from the internal header land in DearImGui.Raw.Internal.Types.
+for flavor in "${flavors[@]}"; do
+  int_dir="generated-out/${flavor}/dear-imgui-raw-${flavor}-internal"
+  int_template="package-templates/${flavor}/dear-imgui-raw-${flavor}-internal"
+  int_in="generated-in/${flavor}"
+  int_json="${int_in}/dcimgui_nodefaultargfunctions_internal.json"
+
+  if [ ! -f "$int_json" ] || [ ! -d "$int_template" ]; then
+    echo "!! ${flavor}-internal: skipping (missing input or template)"
+    continue
+  fi
+
+  echo "==> ${flavor}-internal: scaffolding ${int_dir}"
+  mkdir -p "${int_dir}/cbits"
+  cp -r "${int_template}/." "${int_dir}/"
+  cp "${int_in}/dcimgui_nodefaultargfunctions_internal.cpp" "${int_dir}/cbits/"
+  cp "${int_in}/dcimgui_nodefaultargfunctions_internal.h"   "${int_dir}/cbits/"
+
+  # The internal header pulls in <imgui.h> (the C++ header) so callers
+  # see things like ImGuiInputTextCallbackData. That breaks hsc2hs,
+  # which preprocesses the .hsc files with plain `gcc` and chokes on
+  # the C++ keywords (namespace, constexpr, template). The .cpp side
+  # already includes imgui.h directly, so for the bundled-into-cimgui
+  # path the include in the header is redundant; redirecting it to
+  # the C-style no-default-args public header satisfies both paths.
+  sed -i 's|^#include "imgui.h"$|#include "dcimgui_nodefaultargfunctions.h"|' \
+    "${int_dir}/cbits/dcimgui_nodefaultargfunctions_internal.h"
+
+  echo "==> ${flavor}-internal: FFI generation -> ${int_dir}/src"
+  stack exec -- dear-bindings-ffi \
+    --input "$int_json" \
+    --module-root DearImGui.Raw.Internal \
+    --header dcimgui_nodefaultargfunctions_internal.h \
+    --external-types-module DearImGui.Raw.Types \
+    --external-types-json "${int_in}/dcimgui_nodefaultargfunctions.json" \
+    -o "${int_dir}"
+done
+
 # ----- flavor-neutral backends -----
 #
 # Per-backend metadata: short-name | hpack module suffix | extra cbits files

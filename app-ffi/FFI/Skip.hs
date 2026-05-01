@@ -17,6 +17,7 @@ module FFI.Skip
   , skipEnum
   , skipTypedef
   , entityHasConditionals
+  , conditionalsActiveDefault
   , isNumericLiteral
 
     -- * Reporting
@@ -178,6 +179,7 @@ byValueStructRef names = go
 
 skipDefine :: Define -> Maybe SkipReason
 skipDefine d
+  | not (conditionalsActive defaultDefines d.conditionals) = Just ReasonConditional
   | not (numericContent d.content) = Just ReasonNonNumericDefine
   | otherwise = Nothing
   where
@@ -186,14 +188,18 @@ skipDefine d
 
 skipStruct :: Struct -> Maybe SkipReason
 skipStruct s
+  | not (conditionalsActive defaultDefines s.conditionals) = Just ReasonConditional
   | s.isAnonymous = Just ReasonAnonymous
   | otherwise = Nothing
 
 skipEnum :: Enum_ -> Maybe SkipReason
-skipEnum _ = Nothing
+skipEnum e
+  | not (conditionalsActive defaultDefines e.conditionals) = Just ReasonConditional
+  | otherwise = Nothing
 
 skipTypedef :: Typedef -> Maybe SkipReason
 skipTypedef t
+  | not (conditionalsActive defaultDefines t.conditionals) = Just ReasonConditional
   | typeKindContainsInlineAggregate t.type_.description = Just ReasonInlineAggregate
   | otherwise = Nothing
 
@@ -208,13 +214,33 @@ hasConditionals Nothing = False
 hasConditionals (Just []) = False
 hasConditionals (Just _) = True
 
-{- | The default define set used to evaluate @conditionals@. We don't
-set @IMGUI_DISABLE_DEBUG_TOOLS@, @IMGUI_DISABLE_OBSOLETE_FUNCTIONS@,
-@IMGUI_HAS_IMSTR@, or @__EMSCRIPTEN__@ at compile time, so all of
-those guards resolve under the empty set.
+{- | The default define set used to evaluate @conditionals@. Includes
+the flavor-flagging macros that the dear_bindings public C-API
+header @\#define@s unconditionally — @IMGUI_HAS_DOCK@,
+@IMGUI_HAS_VIEWPORT@, @IMGUI_HAS_TABLE@, @IMGUI_HAS_TEXTURES@.
+Without these the docking-internal package would skip
+@ImGuiDockNode@ et al. (gated by @\#ifdef IMGUI_HAS_DOCK@).
+
+We deliberately do NOT set @IMGUI_DISABLE_DEBUG_TOOLS@,
+@IMGUI_DISABLE_OBSOLETE_FUNCTIONS@, @IMGUI_HAS_IMSTR@,
+@IMGUI_ENABLE_TEST_ENGINE@, @IMGUI_STB_NAMESPACE@, or
+@__EMSCRIPTEN__@ — guards involving those resolve to false here,
+which matches the build's compile-time view.
 -}
 defaultDefines :: Set Text
-defaultDefines = Set.empty
+defaultDefines =
+  Set.fromList
+    [ "IMGUI_HAS_DOCK"
+    , "IMGUI_HAS_VIEWPORT"
+    , "IMGUI_HAS_TABLE"
+    , "IMGUI_HAS_TEXTURES"
+    , -- The C side enables SSE on x86_64 Linux via an
+      -- @#if (defined __SSE__ || …)@ block in the public header.
+      -- That triggers a @#define IMGUI_ENABLE_SSE@, which gates the
+      -- SSE-specialised forms of e.g. @cImRsqrt@. We assume the
+      -- build is SSE-enabled (true on every x86_64 Linux target).
+      "IMGUI_ENABLE_SSE"
+    ]
 
 {- | True iff every conditional in the list evaluates to true under
 the given define set (i.e. the entity is INSIDE all the @#ifdef@s
@@ -225,6 +251,12 @@ conditionalsActive :: Set Text -> Maybe [Conditional] -> Bool
 conditionalsActive _ Nothing = True
 conditionalsActive _ (Just []) = True
 conditionalsActive defs (Just cs) = all (evalConditional defs) cs
+
+-- | 'conditionalsActive' specialised to the default (empty) define
+-- set. Used to filter sub-entities like enum elements whose own
+-- guards may differ from the parent entity's.
+conditionalsActiveDefault :: Maybe [Conditional] -> Bool
+conditionalsActiveDefault = conditionalsActive defaultDefines
 
 {- | Evaluate one preprocessor guard. Recognises @ifdef@ / @ifndef@
 exactly, plus @if@ expressions of the form @defined(X)@ /

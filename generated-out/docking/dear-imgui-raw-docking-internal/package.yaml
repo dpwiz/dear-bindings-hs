@@ -1,0 +1,48 @@
+name:                dear-imgui-raw-docking-internal
+version:             0.0.0
+synopsis:            Raw FFI bindings to ImGui's internal API (docking flavour, DockBuilder etc.).
+license:             BSD-3-Clause
+
+# Internal/unstable surface from imgui_internal.h: DockBuilder, low-level
+# context hooks, internal widget primitives. Upstream offers no forward
+# compatibility for these symbols (see the @[Internal]@ section header in
+# the dear_bindings output) — depend at your own risk.
+
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DuplicateRecordFields
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
+- OverloadedStrings
+
+dependencies:
+- base >= 4.7 && < 5
+- dear-imgui-raw-docking
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  - -optc-Wno-discarded-qualifiers
+  - -optc-Wno-incompatible-pointer-types
+  cxx-sources:
+  # The internal-API .cpp #includes both imgui.h and imgui_internal.h;
+  # both are exported via dear-imgui-raw-docking's install-includes.
+  # imgui.cpp et al. are linked once by the core, not duplicated here.
+  - cbits/dcimgui_nodefaultargfunctions_internal.cpp
+  - cbits/DearImGuiWrappers.cpp
+  include-dirs:
+  - cbits
+  install-includes:
+  - dcimgui_nodefaultargfunctions_internal.h
+  - DearImGuiWrappers.h
+  extra-libraries:
+  - stdc++
+  cxx-options:
+  - -std=c++11
+  - -fpermissive
+  build-tools:
+  - hsc2hs

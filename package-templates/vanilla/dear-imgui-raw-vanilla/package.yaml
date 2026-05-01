@@ -43,7 +43,8 @@ library:
   # by populating cbits/dcimgui.h with a copy of the no-default-args
   # header (identical type definitions, only function-list differs).
   # Both names are exposed so downstream sees what the impl headers
-  # ask for.
+  # ask for. imgui_internal.h is exported for the matching -internal
+  # package whose .cpp #includes it directly.
   #
   # Names are listed without the imgui/ prefix because dcimgui.h
   # does @#include "imconfig.h"@ unqualified; Cabal resolves the
@@ -52,6 +53,7 @@ library:
   - dcimgui_nodefaultargfunctions.h
   - dcimgui.h
   - imgui.h
+  - imgui_internal.h
   - imconfig.h
   - imstb_textedit.h
   - imstb_truetype.h

@@ -13,6 +13,7 @@ When in need for documentation, references, versions:
 In general: just ask the user if you need something, or want to know something about the system, or something is missing.
 
 The temporary directory is `./tmp`.
+Prefer relative paths and avoid chaining commands with `cd`.
 
 In general: keep everything inside the project's directory: scratch pads, one-off scripts, test setups.
 

@@ -2,6 +2,7 @@ output/
 dist/
 dist-ffi/
 tmp/
+imgui.ini
 
 dist-newstyle/
 .stack-work/

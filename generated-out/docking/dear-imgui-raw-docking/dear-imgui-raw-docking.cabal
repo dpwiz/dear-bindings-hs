@@ -62,6 +62,7 @@ library
       dcimgui_nodefaultargfunctions.h
       dcimgui.h
       imgui.h
+      imgui_internal.h
       imconfig.h
       imstb_textedit.h
       imstb_truetype.h

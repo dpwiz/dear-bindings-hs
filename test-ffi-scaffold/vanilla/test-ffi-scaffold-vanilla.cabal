@@ -31,5 +31,6 @@ library
     , dear-imgui-raw-impl-sdl3
     , dear-imgui-raw-impl-vulkan
     , dear-imgui-raw-vanilla
+    , dear-imgui-raw-vanilla-internal
     , vulkan
   default-language: GHC2021

@@ -1,0 +1,69 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.39.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           dear-imgui-raw-docking-internal
+version:        0.0.0
+synopsis:       Raw FFI bindings to ImGui's internal API (docking flavour, DockBuilder etc.).
+license:        BSD-3-Clause
+build-type:     Simple
+
+library
+  exposed-modules:
+      DearImGui.Raw.Internal
+      DearImGui.Raw.Internal.ImBitVector
+      DearImGui.Raw.Internal.ImDrawListSharedData
+      DearImGui.Raw.Internal.ImGui
+      DearImGui.Raw.Internal.ImGuiDockNode
+      DearImGui.Raw.Internal.ImGuiInputTextDeactivatedState
+      DearImGui.Raw.Internal.ImGuiInputTextState
+      DearImGui.Raw.Internal.ImGuiKeyRoutingTable
+      DearImGui.Raw.Internal.ImGuiListClipperData
+      DearImGui.Raw.Internal.ImGuiListClipperRange
+      DearImGui.Raw.Internal.ImGuiMenuColumns
+      DearImGui.Raw.Internal.ImGuiMultiSelectTempData
+      DearImGui.Raw.Internal.ImGuiNavItemData
+      DearImGui.Raw.Internal.ImGuiNextItemData
+      DearImGui.Raw.Internal.ImGuiNextWindowData
+      DearImGui.Raw.Internal.ImGuiStyleVarInfo
+      DearImGui.Raw.Internal.ImGuiTableSettings
+      DearImGui.Raw.Internal.ImGuiTextIndex
+      DearImGui.Raw.Internal.ImGuiTypingSelectState
+      DearImGui.Raw.Internal.ImGuiViewportP
+      DearImGui.Raw.Internal.ImGuiWindow
+      DearImGui.Raw.Internal.ImGuiWindowSettings
+      DearImGui.Raw.Internal.ImRect
+      DearImGui.Raw.Internal.Types
+  other-modules:
+      Paths_dear_imgui_raw_docking_internal
+  autogen-modules:
+      Paths_dear_imgui_raw_docking_internal
+  hs-source-dirs:
+      src
+  default-extensions:
+      BlockArguments
+      DuplicateRecordFields
+      LambdaCase
+      NoFieldSelectors
+      OverloadedRecordDot
+      OverloadedStrings
+  ghc-options: -Wall -optc-Wno-discarded-qualifiers -optc-Wno-incompatible-pointer-types
+  cxx-options: -std=c++11 -fpermissive
+  include-dirs:
+      cbits
+  install-includes:
+      dcimgui_nodefaultargfunctions_internal.h
+      DearImGuiWrappers.h
+  cxx-sources:
+      cbits/dcimgui_nodefaultargfunctions_internal.cpp
+      cbits/DearImGuiWrappers.cpp
+  extra-libraries:
+      stdc++
+  build-tool-depends:
+      hsc2hs:hsc2hs
+  build-depends:
+      base >=4.7 && <5
+    , dear-imgui-raw-docking
+  default-language: GHC2021

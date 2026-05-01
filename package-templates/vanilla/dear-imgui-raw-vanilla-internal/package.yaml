@@ -1,0 +1,45 @@
+name:                dear-imgui-raw-vanilla-internal
+version:             0.0.0
+synopsis:            Raw FFI bindings to ImGui's internal API (vanilla flavour).
+license:             BSD-3-Clause
+
+# Internal/unstable surface from imgui_internal.h: low-level context
+# hooks, internal widget primitives, settings access. Upstream offers no
+# forward compatibility for these symbols (see the @[Internal]@ section
+# header in the dear_bindings output) — depend at your own risk.
+
+language: GHC2021
+
+default-extensions:
+- BlockArguments
+- DuplicateRecordFields
+- LambdaCase
+- NoFieldSelectors
+- OverloadedRecordDot
+- OverloadedStrings
+
+dependencies:
+- base >= 4.7 && < 5
+- dear-imgui-raw-vanilla
+
+library:
+  source-dirs: src
+  ghc-options:
+  - -Wall
+  - -optc-Wno-discarded-qualifiers
+  - -optc-Wno-incompatible-pointer-types
+  cxx-sources:
+  - cbits/dcimgui_nodefaultargfunctions_internal.cpp
+  - cbits/DearImGuiWrappers.cpp
+  include-dirs:
+  - cbits
+  install-includes:
+  - dcimgui_nodefaultargfunctions_internal.h
+  - DearImGuiWrappers.h
+  extra-libraries:
+  - stdc++
+  cxx-options:
+  - -std=c++11
+  - -fpermissive
+  build-tools:
+  - hsc2hs

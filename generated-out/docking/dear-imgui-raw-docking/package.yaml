@@ -38,9 +38,12 @@ library:
   # "dcimgui.h" hardcoded by dear_bindings; we satisfy that include
   # by populating cbits/dcimgui.h with a copy of the no-default-args
   # header (identical type definitions, only function-list differs).
+  # imgui_internal.h is exported for the matching -internal package
+  # (DockBuilder, settings, etc.) whose .cpp #includes it directly.
   - dcimgui_nodefaultargfunctions.h
   - dcimgui.h
   - imgui.h
+  - imgui_internal.h
   - imconfig.h
   - imstb_textedit.h
   - imstb_truetype.h

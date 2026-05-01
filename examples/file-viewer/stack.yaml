@@ -1,0 +1,15 @@
+snapshot:
+  url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/24/38.yaml
+
+packages:
+  - .
+  - ../../generated-out/docking/dear-imgui-raw-docking
+  - ../../generated-out/docking/dear-imgui-raw-docking-internal
+  - ../../generated-out/backends/dear-imgui-raw-impl-opengl3
+  - ../../generated-out/backends/dear-imgui-raw-impl-glfw
+
+flags:
+  dear-imgui-raw-impl-glfw:
+    docking: true
+  dear-imgui-raw-impl-opengl3:
+    docking: true

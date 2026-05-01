@@ -16,6 +16,7 @@ import Foreign.Ptr (FunPtr, Ptr)
 import Foreign.Storable (Storable (..))
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Word (Word8, Word16, Word32, Word64)
+import DearImGui.Raw.Types
 
 #include "dcimgui_impl_glfw.h"
 
