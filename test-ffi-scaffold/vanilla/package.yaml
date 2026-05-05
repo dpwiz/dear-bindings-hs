@@ -31,6 +31,7 @@ dependencies:
   - dear-imgui-raw-impl-vulkan
   - dear-imgui-raw-impl-sdl2
   - dear-imgui-raw-impl-sdl3
+  - dear-imgui-raw-imnodes
   - vulkan
 
 library:

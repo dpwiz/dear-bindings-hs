@@ -10,6 +10,7 @@ packages:
   - ../../generated-out/backends/dear-imgui-raw-impl-vulkan
   - ../../generated-out/backends/dear-imgui-raw-impl-sdl2
   - ../../generated-out/backends/dear-imgui-raw-impl-sdl3
+  - ../../generated-out/imnodes/dear-imgui-raw-imnodes
 
 extra-deps:
   - vulkan-3.26.6
@@ -24,4 +25,6 @@ flags:
   dear-imgui-raw-impl-sdl2:
     vanilla: true
   dear-imgui-raw-impl-sdl3:
+    vanilla: true
+  dear-imgui-raw-imnodes:
     vanilla: true

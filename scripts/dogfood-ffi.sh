@@ -199,6 +199,30 @@ for vfl in vanilla docking; do
     -o "${v_subdir}"
 done
 
+# imnodes extension. Flavor-neutral like the simple backends, but
+# binds a third-party library on top of ImGui rather than a
+# platform/renderer impl. Single .hsc tree built once.
+imnodes_dir="generated-out/imnodes/dear-imgui-raw-imnodes"
+imnodes_json="generated-in/imnodes/dcimnodes.json"
+
+if [ -f "${imnodes_dir}/package.yaml" ] && [ -f "$imnodes_json" ]; then
+  if [ ! -f "${imnodes_dir}/cbits/dcimnodes.cpp" ] || \
+     [ ! -f "${imnodes_dir}/cbits/imnodes/imnodes.cpp" ]; then
+    echo "==> imnodes: cbits not vendored under ${imnodes_dir}/cbits/" >&2
+    exit 1
+  fi
+
+  echo "==> imnodes: regenerating into ${imnodes_dir}/src"
+  rm -rf "${imnodes_dir}/src" "${imnodes_dir}/cbits/DearImGuiWrappers.cpp" "${imnodes_dir}/cbits/DearImGuiWrappers.h"
+  stack exec -- dear-bindings-ffi \
+    --input "$imnodes_json" \
+    --module-root DearImGui.Raw.ImNodes \
+    --header dcimnodes.h \
+    --external-types-module DearImGui.Raw.Types \
+    --external-types-json "$external_core_json" \
+    -o "${imnodes_dir}"
+fi
+
 # Build each requested flavor's consumer test. This transitively
 # builds the backend against the chosen core (via cabal flags) and
 # proves cross-package type identity holds — Test.hs assigns

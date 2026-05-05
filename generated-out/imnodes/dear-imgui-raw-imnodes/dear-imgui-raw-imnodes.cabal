@@ -4,9 +4,9 @@ cabal-version: 2.2
 --
 -- see: https://github.com/sol/hpack
 
-name:           dear-imgui-raw-impl-sdl2
+name:           dear-imgui-raw-imnodes
 version:        0.0.0
-synopsis:       SDL2 platform backend bindings for dear-imgui-raw-{vanilla,docking}.
+synopsis:       Raw FFI bindings to imnodes (Nelarius/imnodes) for dear-imgui-raw-{vanilla,docking}.
 license:        BSD-3-Clause
 build-type:     Simple
 
@@ -22,12 +22,12 @@ flag vanilla
 
 library
   exposed-modules:
-      DearImGui.Raw.Impl.SDL2
-      DearImGui.Raw.Impl.SDL2.Types
+      DearImGui.Raw.ImNodes
+      DearImGui.Raw.ImNodes.Types
   other-modules:
-      Paths_dear_imgui_raw_impl_sdl2
+      Paths_dear_imgui_raw_imnodes
   autogen-modules:
-      Paths_dear_imgui_raw_impl_sdl2
+      Paths_dear_imgui_raw_imnodes
   hs-source-dirs:
       src
   default-extensions:
@@ -41,11 +41,18 @@ library
   cxx-options: -std=c++11 -fpermissive
   include-dirs:
       cbits
+      cbits/imnodes
+  install-includes:
+      dcimnodes.h
+      imnodes/imnodes.h
+      imnodes/imnodes_internal.h
+      DearImGuiWrappers.h
   cxx-sources:
-      cbits/dcimgui_impl_sdl2.cpp
+      cbits/dcimnodes.cpp
+      cbits/imnodes/imnodes.cpp
       cbits/DearImGuiWrappers.cpp
-  pkgconfig-depends:
-      sdl2
+  extra-libraries:
+      stdc++
   build-tool-depends:
       hsc2hs:hsc2hs
   build-depends:
@@ -56,12 +63,8 @@ library
   if !flag(vanilla) && !flag(docking)
     buildable: False
   if flag(vanilla)
-    cxx-sources:
-        cbits/imgui_impl_sdl2_vanilla.cpp
     build-depends:
         dear-imgui-raw-vanilla
   if flag(docking)
-    cxx-sources:
-        cbits/imgui_impl_sdl2_docking.cpp
     build-depends:
         dear-imgui-raw-docking

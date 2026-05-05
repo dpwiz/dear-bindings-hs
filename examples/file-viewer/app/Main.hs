@@ -60,14 +60,8 @@ main = do
     (p : _) -> pure p
     []      -> pure "."
 
-  -- The docking flavor of imgui_impl_glfw queries window attributes
-  -- like GLFW_MOUSE_PASSTHROUGH (0x0002000D) that only exist in
-  -- GLFW >= 3.4; older runtimes flood the callback with InvalidEnum.
-  -- Drop those, surface the rest.
-  GLFW.setErrorCallback $ Just \err msg ->
-    case err of
-      GLFW.Error'InvalidEnum -> pure ()
-      _ -> hPutStrLn stderr $ "GLFW error: " <> msg
+  GLFW.setErrorCallback $ Just \_ msg ->
+    hPutStrLn stderr $ "GLFW error: " <> msg
 
   ok <- GLFW.init
   unless ok do

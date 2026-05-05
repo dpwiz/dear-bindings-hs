@@ -5,6 +5,7 @@ import DearImGui.Raw.Impl.OpenGL3 (cImGui_ImplOpenGL3_RenderDrawData)
 import DearImGui.Raw.Impl.SDL2 (cImGui_ImplSDL2_NewFrame)
 import DearImGui.Raw.Impl.SDL3 (cImGui_ImplSDL3_NewFrame)
 import DearImGui.Raw.Impl.Vulkan (cImGui_ImplVulkan_RenderDrawDataEx)
+import DearImGui.Raw.ImNodes (imNodesBeginNodeEditor, imNodesEndNodeEditor)
 import DearImGui.Raw.Internal.ImGui (imGui_ActivateItemByID)
 import DearImGui.Raw.Types (ImDrawData, ImGuiID)
 import Foreign.Ptr (Ptr)
@@ -24,3 +25,5 @@ checkUnification p cb pl k = do
   cImGui_ImplSDL2_NewFrame
   cImGui_ImplSDL3_NewFrame
   imGui_ActivateItemByID k
+  imNodesBeginNodeEditor
+  imNodesEndNodeEditor

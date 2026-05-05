@@ -6,9 +6,11 @@
 # family (cpp/h/json) that downstream tooling consumes.
 #
 # Inputs:  upstream/imgui-{vanilla,docking}/ (library, tag-pinned)
+#          upstream/imnodes/                 (extension library, hash-pinned)
 #          upstream/dear_bindings/           (tool, tracks main)
 # Outputs: generated-in/{vanilla,docking}/   (per-flavor core + vulkan)
 #          generated-in/backends/            (flavor-neutral backends)
+#          generated-in/imnodes/             (flavor-neutral extension)
 #
 # Prerequisites:
 #   git submodule update --init --recursive
@@ -57,7 +59,7 @@ BACKENDS=(
 # docking branches — vendor a per-flavor pair (`_vanilla.cpp` +
 # `_docking.cpp`). Everything else is identical between branches and
 # vendored as a single shared cpp.
-SPLIT_BACKENDS=(glfw opengl3 vulkan)
+SPLIT_BACKENDS=(glfw opengl3 sdl2 vulkan)
 
 # Extra files to vendor alongside specific backends (loader headers,
 # pre-compiled shader blobs, etc.). Keep this in sync with
@@ -192,6 +194,79 @@ done
 
 # vulkan_type_aliases.json is hand-maintained, not generated. Leave it
 # alone if present.
+
+# ----- 6. imnodes extension (Nelarius/imnodes) -----
+#
+# imnodes is a node-editor library that targets ImGui's public API,
+# not a backend. It's flavor-neutral: vanilla and docking both link
+# the same dcimnodes.{cpp,h}, the binding just needs a flavor-pinned
+# core dependency to provide the underlying ImGui types/symbols.
+#
+# Three patches are applied that wouldn't be needed for plain ImGui
+# headers; each is isolated and explained at its sed/cp site below:
+#   (a) namespace macro expansion before parse
+#   (b) C++ <imgui.h> -> C-shim "dcimgui.h" in the public C header
+#   (c) field-name repair for nested-struct-with-same-name-field
+#       (a known dear_bindings limitation in imnodes' ImNodesIO)
+
+imnodes_src="upstream/imnodes"
+imnodes_dst="generated-in/imnodes"
+imnodes_tmpl="package-templates/imnodes/dear_bindings_templates"
+
+if [ -d "$imnodes_src" ]; then
+  echo "==> imnodes: refreshing $imnodes_dst"
+  rm -rf "$imnodes_dst"
+  mkdir -p "$imnodes_dst"
+
+  # (a) dear_bindings doesn't expand macros, so `namespace IMNODES_NAMESPACE
+  # { ... }` would land in the DOM as a literal namespace named
+  # "IMNODES_NAMESPACE". Pre-substitute the macro with its default
+  # expansion (ImNodes) and switch the system-style include to a quoted
+  # one so the parser resolves it via -t/template-relative paths.
+  sed -e 's|^#include <imgui.h>$|#include "imgui.h"|' \
+      -e 's|IMNODES_NAMESPACE|ImNodes|g' \
+      "$imnodes_src/imnodes.h" \
+      > "$imnodes_dst/imnodes.h"
+
+  echo "==> imnodes: dear_bindings imnodes.h -> dcimnodes"
+  "$PYTHON" "$DB" \
+    --include upstream/imgui-vanilla/imgui.h \
+    --imconfig-path upstream/imgui-vanilla/imconfig.h \
+    -t "$imnodes_tmpl" \
+    -o "$imnodes_dst/dcimnodes" \
+    "$imnodes_dst/imnodes.h"
+
+  # (b) dcimnodes.h is consumed both by the C++ wrapper (under the
+  # cimgui namespace via the template glue, where the C++ imgui.h is
+  # already in scope) and by the Haskell hsc2hs preprocessor (which is
+  # plain C). Rewriting "imgui.h" to the C-flavored "dcimgui.h" lets
+  # the C consumer see ImVec2/ImGuiContext/etc. without dragging in
+  # C++. Mirrors the same patch applied to dcimgui_internal in the
+  # internal-binding step above.
+  sed -i 's|^#include "imgui.h"$|#include "dcimgui.h"|' \
+    "$imnodes_dst/dcimnodes.h"
+
+  # (c) imnodes' ImNodesIO has three nested structs whose field names
+  # match the type names (struct EmulateThreeButtonMouse { ... }
+  # EmulateThreeButtonMouse;). dear_bindings flattens the inner type
+  # to ImNodesIO_EmulateThreeButtonMouse but emits the parent member
+  # without a field name, producing a compile error. Re-attach the
+  # field names explicitly. If upstream dear_bindings ever fixes this,
+  # the sed becomes a no-op.
+  sed -i \
+    -e 's|^    EmulateThreeButtonMouse$|    ImNodesIO_EmulateThreeButtonMouse EmulateThreeButtonMouse;|' \
+    -e 's|^    LinkDetachWithModifierClick$|    ImNodesIO_LinkDetachWithModifierClick LinkDetachWithModifierClick;|' \
+    -e 's|^    MultipleSelectModifier$|    ImNodesIO_MultipleSelectModifier MultipleSelectModifier;|' \
+    "$imnodes_dst/dcimnodes.h"
+
+  # Drop the side-channel JSONs we don't consume (imgui/imconfig
+  # snapshots emitted alongside dcimnodes.json). Keeping
+  # generated-in/imnodes/ minimal makes downstream wiring obvious.
+  rm -f "$imnodes_dst"/dcimnodes_imgui.json \
+        "$imnodes_dst"/dcimnodes_imconfig.json
+else
+  echo "!! imnodes: $imnodes_src missing — run: git submodule update --init upstream/imnodes" >&2
+fi
 
 echo "==> generated-in/ refreshed."
 echo "    Next: scripts/generate-all-ffi.sh to rebuild Haskell packages."

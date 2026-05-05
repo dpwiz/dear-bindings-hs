@@ -1,7 +1,13 @@
-name:                dear-imgui-raw-impl-sdl2
+name:                dear-imgui-raw-imnodes
 version:             0.0.0
-synopsis:            SDL2 platform backend bindings for dear-imgui-raw-{vanilla,docking}.
+synopsis:            Raw FFI bindings to imnodes (Nelarius/imnodes) for dear-imgui-raw-{vanilla,docking}.
 license:             BSD-3-Clause
+
+# imnodes is a node-editor extension for Dear ImGui. It links against
+# the C++ ImGui core, so the package depends on whichever flavor the
+# consumer has wired up via cabal flag — the binding itself does not
+# differ between flavors (unlike the imgui_impl_*.cpp backends, where
+# the docking branch diverges).
 
 language: GHC2021
 
@@ -32,27 +38,25 @@ library:
   - -Wall
   - -optc-Wno-discarded-qualifiers
   - -optc-Wno-incompatible-pointer-types
-  # The dear_bindings shim is byte-identical between flavours, so
-  # this stanza always includes it. The imgui-side backend
-  # (imgui_impl_sdl2.cpp) DOES differ between flavours — the docking
-  # branch carries multi-viewport plumbing the vanilla branch lacks
-  # (see ImGui_ImplSDL2_Data fields like UseVulkan/WantUpdateMonitors,
-  # the InitMultiViewportSupport entry points, etc.). Without the
-  # split a docking-flavor build silently mismatches sizeof(ImGuiIO)
-  # at runtime — IMGUI_CHECKVERSION asserts on first backend init.
-  # The conditional cxx-sources below picks the right .cpp.
   cxx-sources:
-  - cbits/dcimgui_impl_sdl2.cpp
+  - cbits/dcimnodes.cpp
+  - cbits/imnodes/imnodes.cpp
   - cbits/DearImGuiWrappers.cpp
   include-dirs:
   - cbits
+  - cbits/imnodes
+  install-includes:
+  - dcimnodes.h
+  - imnodes/imnodes.h
+  - imnodes/imnodes_internal.h
+  - DearImGuiWrappers.h
+  extra-libraries:
+  - stdc++
   cxx-options:
   - -std=c++11
   - -fpermissive
   build-tools:
   - hsc2hs
-  pkg-config-dependencies:
-  - sdl2
   when:
   - condition: flag(vanilla) && flag(docking)
     buildable: false
@@ -61,10 +65,6 @@ library:
   - condition: flag(vanilla)
     dependencies:
     - dear-imgui-raw-vanilla
-    cxx-sources:
-    - cbits/imgui_impl_sdl2_vanilla.cpp
   - condition: flag(docking)
     dependencies:
     - dear-imgui-raw-docking
-    cxx-sources:
-    - cbits/imgui_impl_sdl2_docking.cpp

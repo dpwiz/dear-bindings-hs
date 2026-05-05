@@ -6,25 +6,13 @@ packages:
   - ../../generated-out/docking/dear-imgui-raw-docking
   - ../../generated-out/docking/dear-imgui-raw-docking-internal
   - ../../generated-out/backends/dear-imgui-raw-impl-opengl3
-  - ../../generated-out/backends/dear-imgui-raw-impl-glfw
-  - ../../generated-out/backends/dear-imgui-raw-impl-vulkan
   - ../../generated-out/backends/dear-imgui-raw-impl-sdl2
-  - ../../generated-out/backends/dear-imgui-raw-impl-sdl3
   - ../../generated-out/imnodes/dear-imgui-raw-imnodes
-
-extra-deps:
-  - vulkan-3.26.6
 
 flags:
   dear-imgui-raw-impl-opengl3:
     docking: true
-  dear-imgui-raw-impl-glfw:
-    docking: true
-  dear-imgui-raw-impl-vulkan:
-    docking: true
   dear-imgui-raw-impl-sdl2:
-    docking: true
-  dear-imgui-raw-impl-sdl3:
     docking: true
   dear-imgui-raw-imnodes:
     docking: true

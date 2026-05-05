@@ -1,0 +1,9 @@
+snapshot:
+  url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/24/38.yaml
+
+# imnodes is flavor-neutral — building it standalone won't work
+# (depends on either dear-imgui-raw-vanilla or -docking via flag).
+# Verification happens through the consumer projects under
+# test-ffi-scaffold/{vanilla,docking}/.
+packages:
+- .

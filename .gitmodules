@@ -10,3 +10,9 @@
 	path = upstream/dear_bindings
 	url = https://github.com/dearimgui/dear_bindings
 	branch = main
+[submodule "upstream/imnodes"]
+	path = upstream/imnodes
+	url = https://github.com/Nelarius/imnodes
+	# Pinned at a specific commit (no `branch =`): v0.5 predates the
+	# imgui 1.92 migration and there's no v0.6+ tag yet. Bump the
+	# gitlink SHA explicitly when retargeting.

@@ -4,6 +4,8 @@ The project is using the `stack` toolchain:
 - `stack.yaml` -- project-level configuration: pin deps, set package flags.
 - `package.yaml` -- package-level: declare deps, declare and react to package flags, manage GHC options and extensions.
 - Commands are typically wrapped in `stack`: `stack build`, `stack clean`, `stack ghci`, `stack haddock`, `stack hoogle`, ...
+- Use project's own environment to query for types and docs.
+- Use `stack clean` to flush cached artifacts that require force-rebuilding.
 
 When in need for documentation, references, versions:
 * Use stack-provided tools to query for types, docs etc.

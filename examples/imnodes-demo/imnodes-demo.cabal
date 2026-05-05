@@ -4,34 +4,42 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           test-ffi-scaffold-docking
+name:           imnodes-demo
 version:        0.0.0
-synopsis:       Cross-package type-unification check (docking flavor).
+synopsis:       Minimal docking + SDL2 + OpenGL3 demo (imnodes node editor).
 build-type:     Simple
 
-library
-  exposed-modules:
-      Test
+executable imnodes-demo
+  main-is: Main.hs
   other-modules:
-      Paths_test_ffi_scaffold_docking
+      App.Helpers
+      App.NodeEditor
+      Paths_imnodes_demo
   hs-source-dirs:
-      src
+      app
   default-extensions:
       BlockArguments
       DuplicateRecordFields
       LambdaCase
+      NamedFieldPuns
       NoFieldSelectors
       OverloadedRecordDot
       OverloadedStrings
+      PatternSynonyms
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Wall
+  extra-libraries:
+      GL
+  build-tools:
+      hsc2hs
   build-depends:
       base
+    , bytestring
     , dear-imgui-raw-docking
     , dear-imgui-raw-docking-internal
     , dear-imgui-raw-imnodes
-    , dear-imgui-raw-impl-glfw
     , dear-imgui-raw-impl-opengl3
     , dear-imgui-raw-impl-sdl2
-    , dear-imgui-raw-impl-sdl3
-    , dear-imgui-raw-impl-vulkan
-    , vulkan
+    , directory
+    , sdl2
+    , text
   default-language: GHC2021

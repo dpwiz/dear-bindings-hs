@@ -32,13 +32,18 @@ library:
   - -Wall
   - -optc-Wno-discarded-qualifiers
   - -optc-Wno-incompatible-pointer-types
+  # The dear_bindings shim is byte-identical between flavours, so
+  # this stanza always includes it. The imgui-side backend
+  # (imgui_impl_sdl2.cpp) DOES differ between flavours — the docking
+  # branch carries multi-viewport plumbing the vanilla branch lacks
+  # (see ImGui_ImplSDL2_Data fields like UseVulkan/WantUpdateMonitors,
+  # the InitMultiViewportSupport entry points, etc.). Without the
+  # split a docking-flavor build silently mismatches sizeof(ImGuiIO)
+  # at runtime — IMGUI_CHECKVERSION asserts on first backend init.
+  # The conditional cxx-sources below picks the right .cpp.
   cxx-sources:
   - cbits/dcimgui_impl_sdl2.cpp
   - cbits/DearImGuiWrappers.cpp
-  # imgui-side backend is identical across vanilla/docking branches
-  # for SDL2 (no multi-viewport-only divergence), so a single cpp
-  # serves both flavors.
-  - cbits/imgui_impl_sdl2.cpp
   include-dirs:
   - cbits
   cxx-options:
@@ -56,6 +61,10 @@ library:
   - condition: flag(vanilla)
     dependencies:
     - dear-imgui-raw-vanilla
+    cxx-sources:
+    - cbits/imgui_impl_sdl2_vanilla.cpp
   - condition: flag(docking)
     dependencies:
     - dear-imgui-raw-docking
+    cxx-sources:
+    - cbits/imgui_impl_sdl2_docking.cpp

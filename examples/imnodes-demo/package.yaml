@@ -1,0 +1,52 @@
+name: imnodes-demo
+version: 0.0.0
+synopsis: Minimal docking + SDL2 + OpenGL3 demo (imnodes node editor).
+
+# Companion to file-viewer/. Same docking flavor and OpenGL3 backend,
+# different platform backend (SDL2 instead of GLFW), different UI:
+# instead of a file browser, a tiny node editor exercising the
+# dear-imgui-raw-imnodes package — two nodes connected by user-drawn
+# links that persist across frames.
+
+language: GHC2021
+
+default-extensions:
+  - BlockArguments
+  - DuplicateRecordFields
+  - LambdaCase
+  - NamedFieldPuns
+  - NoFieldSelectors
+  - OverloadedRecordDot
+  - OverloadedStrings
+  - PatternSynonyms
+
+dependencies:
+  - base
+
+executables:
+  imnodes-demo:
+    main: Main.hs
+    source-dirs: app
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -Wall
+    dependencies:
+      - bytestring
+      - directory
+      - text
+      - sdl2
+      - dear-imgui-raw-docking
+      - dear-imgui-raw-docking-internal
+      - dear-imgui-raw-impl-sdl2
+      - dear-imgui-raw-impl-opengl3
+      - dear-imgui-raw-imnodes
+    build-tools:
+      - hsc2hs
+    # The OpenGL3 backend uses imgl3w to dlopen its own symbols at
+    # runtime, so it doesn't pull libGL through the linker. We hit
+    # libGL directly for glViewport/glClear, so we have to link it
+    # ourselves. Same wiring as file-viewer/.
+    extra-libraries:
+      - GL

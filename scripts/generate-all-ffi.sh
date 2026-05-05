@@ -271,4 +271,40 @@ for vfl in vanilla docking; do
     -o "${v_subdir}"
 done
 
+# ----- imnodes extension -----
+#
+# Flavor-neutral like the simple backends, but without per-flavor
+# imgui-side cbits — imnodes itself doesn't differ between vanilla
+# and docking branches. Single .cpp + the upstream library sources
+# vendored under cbits/imnodes/.
+imnodes_pkg="dear-imgui-raw-imnodes"
+imnodes_out="generated-out/imnodes/${imnodes_pkg}"
+imnodes_tmpl="package-templates/imnodes/${imnodes_pkg}"
+imnodes_in="generated-in/imnodes"
+
+if [ -f "${imnodes_in}/dcimnodes.json" ] && [ -d "$imnodes_tmpl" ]; then
+  echo "==> imnodes: scaffolding ${imnodes_out}"
+  mkdir -p "${imnodes_out}/cbits/imnodes"
+  cp -r "${imnodes_tmpl}/." "${imnodes_out}/"
+  cp "${imnodes_in}/dcimnodes.cpp" "${imnodes_out}/cbits/"
+  cp "${imnodes_in}/dcimnodes.h"   "${imnodes_out}/cbits/"
+  # Vendor imnodes proper from the submodule. imnodes.cpp #includes
+  # imnodes.h with a quoted path; flatness inside cbits/imnodes/ is
+  # what the package.yaml's include-dirs expects.
+  cp "upstream/imnodes/imnodes.cpp"          "${imnodes_out}/cbits/imnodes/"
+  cp "upstream/imnodes/imnodes.h"            "${imnodes_out}/cbits/imnodes/"
+  cp "upstream/imnodes/imnodes_internal.h"   "${imnodes_out}/cbits/imnodes/"
+
+  echo "==> imnodes: FFI generation -> ${imnodes_out}/src"
+  stack exec -- dear-bindings-ffi \
+    --input "${imnodes_in}/dcimnodes.json" \
+    --module-root DearImGui.Raw.ImNodes \
+    --header dcimnodes.h \
+    --external-types-module DearImGui.Raw.Types \
+    --external-types-json "$external_core_json" \
+    -o "${imnodes_out}"
+else
+  echo "!! imnodes: skipping — generated-in/imnodes/dcimnodes.json or template missing"
+fi
+
 echo "==> generated-out/ rebuilt from scratch."

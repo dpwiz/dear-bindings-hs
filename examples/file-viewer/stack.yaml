@@ -7,9 +7,20 @@ packages:
   - ../../generated-out/docking/dear-imgui-raw-docking-internal
   - ../../generated-out/backends/dear-imgui-raw-impl-opengl3
   - ../../generated-out/backends/dear-imgui-raw-impl-glfw
+  # Local-patched bindings-GLFW: system-GLFW flag pinned at 3.3.* upstream;
+  # loosened to allow 3.4 so impl-glfw (compiled vs. system 3.4 headers)
+  # and bindings-GLFW (linked against system 3.4 lib) agree at runtime.
+#  - ../../tmp/bindings-GLFW-3.3.9.3
+
+extra-deps:
+  - git: https://github.com/dpwiz/bindings-GLFW.git
+    commit: d5be6fb3101a786f06de6fb34bf44d38e830c53b
 
 flags:
   dear-imgui-raw-impl-glfw:
     docking: true
   dear-imgui-raw-impl-opengl3:
     docking: true
+  bindings-GLFW:
+    Wayland: true
+#    system-GLFW: true
